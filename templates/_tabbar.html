@@ -1,0 +1,30 @@
+{# Phone bottom tab bar for the Flask pages. Mirrors AppShell's tab bar in
+   frontend/src/components/AppShell.tsx and nav.ts; shown only at ≤760px
+   (styles in static/design-system.css). Icons are lucide paths. #}
+{% set _icons = {
+  'grid': '<rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/>',
+  'route': '<circle cx="6" cy="19" r="3"/><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"/><circle cx="18" cy="5" r="3"/>',
+  'chart': '<path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/>',
+  'user': '<circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 0 0-16 0"/>',
+  'drops': '<path d="M7 16.3c2.2 0 4-1.83 4-4.05 0-1.16-.57-2.26-1.71-3.19S7.29 6.75 7 5.3c-.29 1.45-1.14 2.84-2.29 3.76S3 11.1 3 12.25c0 2.22 1.8 4.05 4 4.05z"/><path d="M12.56 6.6A10.97 10.97 0 0 0 14 3.02c.5 2.5 2 4.9 4 6.5s3 3.5 3 5.5a6.98 6.98 0 0 1-11.91 4.97"/>',
+  'orders': '<rect width="8" height="4" x="8" y="2" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M12 11h4"/><path d="M12 16h4"/><path d="M8 11h.01"/><path d="M8 16h.01"/>',
+  'pin': '<path d="M18 8c0 3.613-3.869 7.429-5.393 8.795a1 1 0 0 1-1.214 0C9.87 15.429 6 11.613 6 8a6 6 0 0 1 12 0"/><circle cx="12" cy="8" r="2"/><path d="M8.714 14h-3.71a1 1 0 0 0-.948.683l-2.004 6A1 1 0 0 0 3 22h18a1 1 0 0 0 .948-1.316l-2-6a1 1 0 0 0-.949-.684h-3.712"/>',
+  'gauge': '<path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/>',
+} %}
+{% set _tabs = {
+  'demand': [('Water', '/demand', 'drops', []), ('Orders', '/track', 'orders', ['/invoice']), ('Profile', '/profile', 'user', [])],
+  'stp': [('Plant', '/supply', 'grid', []), ('Orders', '/stp_track', 'pin', ['/track_stp']), ('Quality', '/supply_ocems', 'gauge', []), ('Profile', '/profile', 'user', [])],
+  'tanker': [('Jobs', '/tanker', 'grid', []), ('Trips', '/trip_history', 'route', []), ('Fleet', '/tanker/reports', 'chart', []), ('Profile', '/profile', 'user', [])],
+} %}
+{% set _role = (session.get('role') or '')|lower %}
+{% if _tabs.get(_role) %}
+<nav class="app-tabbar" aria-label="Sections">
+  {% for label, href, icon, also in _tabs[_role] %}
+  {% set _on = request.path == href or request.path in also %}
+  <a href="{{ href }}" class="app-tab{% if _on %} active{% endif %}"{% if _on %} aria-current="page"{% endif %}>
+    <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{{ _icons[icon]|safe }}</svg>
+    <span>{{ label }}</span>
+  </a>
+  {% endfor %}
+</nav>
+{% endif %}

@@ -9,6 +9,7 @@ import { roleNav } from "../components/nav";
 import { UserMenu } from "../components/UserMenu";
 import { ChatWidget } from "../components/ChatWidget";
 import { FitBounds, MapFrame, liveDot, pinIcon } from "../components/map";
+import { MapSheet, setSheet, useIsPhone } from "../components/MapSheet";
 import { FleetPanel, type Vehicle } from "../components/Fleet";
 import { Badge, Empty, Notice, Segmented, SkeletonRows, Spinner, Stat, StatusBadge } from "../components/ui";
 import { getJSON, postForm, postJSON } from "../lib/api";
@@ -17,6 +18,7 @@ import { useToast } from "../lib/toast";
 import { num, when } from "../lib/format";
 import { applyFilter, filterOptions, type OrderFilter } from "../lib/orders";
 import { toPoint } from "../lib/route";
+import { openGoogleMapsNavigation } from "../lib/navigate";
 import "./tanker.css";
 
 interface Order {
@@ -46,6 +48,20 @@ function stageOf(o: Order, me: string): Stage {
 }
 const STAGE_STATUS: Record<Stage, string> = { offer: "Pending", pickup: "Assigned", deliver: "Out for Delivery", done: "Delivered" };
 
+/** Where the driver heads next: the plant before pickup, the buyer after. */
+function nextStop(job: Job): { point: LatLngTuple; label: string; kind: "pickup" | "drop" } | null {
+  const o = job.o;
+  if (job.stage === "pickup") {
+    const p = toPoint(o.stp_lat, o.stp_lon);
+    return p ? { point: p, label: o.stp_name || o.source_stp_name || "Pickup plant", kind: "pickup" } : null;
+  }
+  if (job.stage === "deliver") {
+    const d = toPoint(o.delivery_lat, o.delivery_lon);
+    return d ? { point: d, label: o.location || "Drop-off", kind: "drop" } : null;
+  }
+  return null;
+}
+
 export default function Tanker() {
   const toast = useToast();
   const ov = useAsync((s) => getJSON<Overview>("/api/tanker/overview", s));
@@ -56,6 +72,8 @@ export default function Tanker() {
   const seenOffers = useRef<Set<string> | null>(null);
   const mapRef = useRef<HTMLElement>(null);
 
+  const trip = useLiveTrip();
+  const phone = useIsPhone();
   const me = ov.data?.operator_id ?? "";
   const jobs: Job[] = useMemo(() => {
     const live = (ov.data?.orders ?? []).map((o) => ({ o, stage: stageOf(o, me) }));
@@ -93,6 +111,11 @@ export default function Tanker() {
       else if (kind === "reject") await postForm("/reject_pickup", { order_id: id });
       else await postForm(`/tanker/order/${encodeURIComponent(id)}/${kind === "pickup" ? "pickup" : "delivered"}`, {});
       toast({ accept: "Pickup accepted.", reject: "Offer declined.", pickup: "Marked as picked up — now out for delivery.", deliver: "Delivery confirmed." }[kind], "success");
+      // Loaded and on the road: take the driver straight to the drop-off.
+      if (kind === "pickup" && trip.on) {
+        const d = toPoint(o.delivery_lat, o.delivery_lon);
+        if (d) openGoogleMapsNavigation(d);
+      }
       if (kind === "reject" || kind === "deliver") setSelected(null);
       ov.reload();
     } catch (e) {
@@ -124,7 +147,6 @@ export default function Tanker() {
     return () => ctrl.abort();
   }, [sel?.order_id, sel?.status, ov.data?.operator_latitude]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const trip = useLiveTrip();
   const base = ov.data ? toPoint(ov.data.operator_latitude, ov.data.operator_longitude) : null;
   const liveOrders = ov.data?.orders ?? [];
   const fitPts = useMemo(() => {
@@ -139,14 +161,68 @@ export default function Tanker() {
     return pts.length ? pts : null;
   }, [route, liveOrders, base?.[0]]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  function view(id: string) {
-    setSelected(id);
-    mapRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  // The job the driver is working on now: the one they opened, else one already
+  // on the road, else the next pickup.
+  const current: Job | null =
+    (selJob && (selJob.stage === "pickup" || selJob.stage === "deliver") ? selJob : null) ??
+    active.find((j) => j.stage === "deliver") ?? active[0] ?? null;
+
+  /** Start sharing location, then hand the driver to Google Maps for the next stop. */
+  async function startJourney(job: Job | null = current) {
+    const stop = job ? nextStop(job) : null;
+    if (!trip.on) await trip.start();
+    if (stop) openGoogleMapsNavigation(stop.point);
+    else if (!job) toast("Live trip started. Accept an offer to get directions.", "info");
+    else toast("This job has no map location, so directions aren't available.", "danger");
   }
 
+  function view(id: string) {
+    setSelected(id);
+    // Phones: lower the sheet so the route is visible; desktop: scroll up to the map.
+    if (phone) setSheet("peek");
+    else mapRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  const sheetPeek = current ? 300 : 210;
+
   const op = ov.data?.operator;
+  const panel = selJob && (
+
+            <aside className="map-panel" aria-live="polite">
+              <header className="row-between">
+                <div className="row wrap" style={{ gap: 8 }}>
+                  <strong className="num">{selJob.o.order_id}</strong>
+                  {selJob.stage === "offer" ? <Badge tone="warning">New offer</Badge> : <StatusBadge status={selJob.status} />}
+                </div>
+                <button type="button" className="btn btn-ghost btn-sm btn-icon" onClick={() => setSelected(null)} aria-label="Close details"><X size={15} /></button>
+              </header>
+              <div className="job-legs">
+                <span><i className="leg-dot pick" /><em>{selJob.o.stp_name || selJob.o.source_stp_name || "Pickup plant"}</em></span>
+                <span><i className="leg-dot drop" /><em>{selJob.o.location || "Drop-off"}</em></span>
+              </div>
+              <dl className="panel-figs">
+                <div><dt><Navigation size={13} /> Trip</dt><dd className="num">{route?.km ? `${num(route.km, 1)} km` : selJob.o.distance_km ? `${num(selJob.o.distance_km, 1)} km` : "—"}</dd></div>
+                <div><dt><Timer size={13} /> Drive</dt><dd className="num">{route?.km ? `${Math.round((route.km / 28) * 60)} min` : "—"}</dd></div>
+                <div><dt><Truck size={13} /> Load</dt><dd className="num">{num(selJob.o.quantity_kld)} KLD</dd></div>
+              </dl>
+              {selJob.o.buyer_name && (
+                <div className="req-buyer">
+                  {selJob.o.buyer_name}
+                  {selJob.o.buyer_phone && <a href={`tel:${selJob.o.buyer_phone}`}><Phone size={13} /> {selJob.o.buyer_phone}</a>}
+                </div>
+              )}
+              {selJob.stage === "done" && <p className="muted" style={{ fontSize: 12.5 }}>Delivered {when(selJob.o.delivered_at)}</p>}
+              <div className="panel-actions">
+                {nextStop(selJob) && (
+                  <button className="btn btn-sm btn-secondary" onClick={() => void startJourney(selJob)}><Navigation /> Navigate</button>
+                )}
+                <JobActions job={selJob} busy={busy} act={act} />
+              </div>
+            </aside>
+  );
   return (
     <AppShell
+      mapFirst
       nav={roleNav.tanker!}
       title={op?.operator_name ?? "Tanker dashboard"}
       subtitle={op ? `${op.area || "Bengaluru"} · ${op.operator_type === "contracted" ? "Contracted partner" : "Independent operator"}` : "Pickups, deliveries and live trip"}
@@ -165,7 +241,7 @@ export default function Tanker() {
         {/* MAP — the centrepiece */}
         <section className="card hero-map-card" ref={mapRef} aria-label="Jobs map">
           <MapFrame className="hero-map" scrollZoom>
-            <FitBounds padRight={selJob && window.innerWidth > 760 ? 352 : 0} bounds={fitPts} fitKey={`${selected}|${route ? 1 : 0}|${liveOrders.length}|${base?.[0] ?? ""}`} />
+            <FitBounds padRight={selJob && !phone ? 352 : 0} padTop={phone ? 80 : 0} padBottom={phone ? sheetPeek : 0} bounds={fitPts} fitKey={`${selected}|${route ? 1 : 0}|${liveOrders.length}|${base?.[0] ?? ""}`} />
             {base && <Marker position={base} icon={pinIcon("truck", "ink")}><Popup><strong>Your base</strong></Popup></Marker>}
             {trip.pos && <Marker position={trip.pos} icon={liveDot} zIndexOffset={900}><Popup>Your live position</Popup></Marker>}
             {route && <Polyline positions={route.toPickup} pathOptions={{ color: "#5f6e82", weight: 5, dashArray: "6 8" }} />}
@@ -197,7 +273,7 @@ export default function Tanker() {
             {trip.on ? (
               <button className="btn btn-sm btn-danger" onClick={trip.stop}><CircleStop /> Stop</button>
             ) : (
-              <button className="btn btn-sm btn-primary" onClick={trip.start} disabled={trip.starting}>{trip.starting ? <Spinner /> : <Play />} Start trip</button>
+              <button className="btn btn-sm btn-primary" onClick={() => void startJourney()} disabled={trip.starting}>{trip.starting ? <Spinner /> : <Play />} Start trip</button>
             )}
           </div>
 
@@ -207,42 +283,30 @@ export default function Tanker() {
             <span><span className="legend-dot" style={{ background: "var(--brand)" }} />Drop-off</span>
           </div>
 
-          {selJob && (
-            <aside className="map-panel" aria-live="polite">
-              <header className="row-between">
-                <div className="row wrap" style={{ gap: 8 }}>
-                  <strong className="num">{selJob.o.order_id}</strong>
-                  {selJob.stage === "offer" ? <Badge tone="warning">New offer</Badge> : <StatusBadge status={selJob.status} />}
-                </div>
-                <button type="button" className="btn btn-ghost btn-sm btn-icon" onClick={() => setSelected(null)} aria-label="Close details"><X size={15} /></button>
-              </header>
-              <div className="job-legs">
-                <span><i className="leg-dot pick" /><em>{selJob.o.stp_name || selJob.o.source_stp_name || "Pickup plant"}</em></span>
-                <span><i className="leg-dot drop" /><em>{selJob.o.location || "Drop-off"}</em></span>
-              </div>
-              <dl className="panel-figs">
-                <div><dt><Navigation size={13} /> Trip</dt><dd className="num">{route?.km ? `${num(route.km, 1)} km` : selJob.o.distance_km ? `${num(selJob.o.distance_km, 1)} km` : "—"}</dd></div>
-                <div><dt><Timer size={13} /> Drive</dt><dd className="num">{route?.km ? `${Math.round((route.km / 28) * 60)} min` : "—"}</dd></div>
-                <div><dt><Truck size={13} /> Load</dt><dd className="num">{num(selJob.o.quantity_kld)} KLD</dd></div>
-              </dl>
-              {selJob.o.buyer_name && (
-                <div className="req-buyer">
-                  {selJob.o.buyer_name}
-                  {selJob.o.buyer_phone && <a href={`tel:${selJob.o.buyer_phone}`}><Phone size={13} /> {selJob.o.buyer_phone}</a>}
-                </div>
-              )}
-              {selJob.stage === "done" && <p className="muted" style={{ fontSize: 12.5 }}>Delivered {when(selJob.o.delivered_at)}</p>}
-              <JobActions job={selJob} busy={busy} act={act} />
-            </aside>
-          )}
+          {!phone && panel}
         </section>
 
-        <section className="grid grid-4 mt-16">
+        <MapSheet peek={sheetPeek} label="Jobs and trip">
+        {phone && panel}
+        <section className="grid grid-4 mt-16 stat-strip tanker-stats">
           <Stat icon={Inbox} label="Offers waiting" value={ov.data ? offers.length : "—"} hint="Respond before they expire" />
           <Stat icon={Truck} label="Active jobs" value={ov.data ? active.length : "—"} hint={`${active.filter((x) => x.stage === "deliver").length} out for delivery`} />
           <Stat icon={PackageCheck} label="Completed" value={ov.data ? (ov.data.completed?.length ?? 0) : "—"} hint="Deliveries confirmed" />
           <Stat icon={Navigation} label="Live trip" value={trip.on ? "On" : "Off"} hint={trip.message} />
         </section>
+
+        {current && (
+          <CurrentJob
+            job={current}
+            route={selected === current.o.order_id ? route : null}
+            tripOn={trip.on}
+            starting={trip.starting}
+            busy={busy}
+            act={act}
+            onNavigate={() => void startJourney(current)}
+            onView={() => view(current.o.order_id)}
+          />
+        )}
 
         <div className="tanker-grid mt-16">
           <section className="card">
@@ -274,6 +338,9 @@ export default function Tanker() {
                       {j.stage !== "done" && (
                         <button className="btn btn-sm btn-ghost" onClick={() => view(j.o.order_id)}><MapPinned /> View on map</button>
                       )}
+                      {(j.stage === "pickup" || j.stage === "deliver") && nextStop(j) && (
+                        <button className="btn btn-sm btn-secondary" onClick={() => void startJourney(j)}><Navigation /> Navigate</button>
+                      )}
                       <JobActions job={j} busy={busy} act={act} />
                     </div>
                   </li>
@@ -288,9 +355,51 @@ export default function Tanker() {
 
           <FleetPanel vehicles={ov.data?.vehicles ?? []} free={ov.data?.available_tankers ?? 0} total={ov.data?.operational_tankers ?? 0} onJob={ov.data?.active_tankers ?? 0} />
         </div>
+        </MapSheet>
       </main>
       <ChatWidget role="tanker" />
     </AppShell>
+  );
+}
+
+function CurrentJob({ job, route, tripOn, starting, busy, act, onNavigate, onView }: {
+  job: Job; route: { km: number } | null; tripOn: boolean; starting: boolean; busy: string | null;
+  act: (o: Order, k: "accept" | "reject" | "pickup" | "deliver") => void; onNavigate: () => void; onView: () => void;
+}) {
+  const o = job.o;
+  const stop = nextStop(job);
+  const toPickup = job.stage === "pickup";
+  const km = route?.km || Number(o.distance_km) || 0;
+  return (
+    <section className="card current-job" data-stage={job.stage} aria-label="Current job">
+      <header className="current-head">
+        <span className="current-step">{toPickup ? "Step 1 of 2 · Head to pickup" : "Step 2 of 2 · Deliver"}</span>
+        <button type="button" className="current-id num" onClick={onView} title="Show on map">{o.order_id}</button>
+      </header>
+      <div className="current-dest">
+        <span className="current-icon" data-kind={stop?.kind ?? (toPickup ? "pickup" : "drop")}>{toPickup ? <Truck size={18} /> : <PackageCheck size={18} />}</span>
+        <div>
+          <small>{toPickup ? "Collect water at" : "Drop off at"}</small>
+          <strong>{toPickup ? o.stp_name || o.source_stp_name || "Pickup plant" : o.location || "Drop-off"}</strong>
+        </div>
+      </div>
+      <div className="current-facts">
+        <span className="num"><b>{num(o.quantity_kld)}</b> KLD</span>
+        {km > 0 && <span className="num"><b>{num(km, 1)}</b> km</span>}
+        {km > 0 && <span className="num">~<b>{Math.round((km / 28) * 60)}</b> min</span>}
+        {o.buyer_phone && (
+          <a className="current-call" href={`tel:${o.buyer_phone}`} aria-label={`Call ${o.buyer_name || "buyer"}`}><Phone size={15} /> Call</a>
+        )}
+      </div>
+      <div className="current-actions">
+        <button type="button" className="btn btn-lg btn-primary" onClick={onNavigate} disabled={starting || !stop}>
+          {starting ? <Spinner /> : <Navigation />}
+          {tripOn ? "Navigate" : "Start trip"}
+        </button>
+        <JobActions job={job} busy={busy} act={act} />
+      </div>
+      {!tripOn && stop && <p className="current-hint">Opens Google Maps and shares your live location with the buyer.</p>}
+    </section>
   );
 }
 
@@ -372,27 +481,43 @@ function useLiveTrip() {
     }
   }, []);
 
-  const start = useCallback(() => {
-    if (!navigator.geolocation) return setMessage("Location isn't available in this browser.");
+  /** Resolves once the first GPS fix arrives (true) or location fails (false).
+      Waits at most 10 s so directions still open on a slow fix. */
+  const start = useCallback((): Promise<boolean> => {
+    if (!navigator.geolocation) {
+      setMessage("Location isn't available in this browser.");
+      return Promise.resolve(false);
+    }
+    if (watch.current !== null) return Promise.resolve(true);
     setStarting(true);
     setMessage("Waiting for GPS…");
-    watch.current = navigator.geolocation.watchPosition(
-      (p) => {
-        latest.current = p;
-        setPos([p.coords.latitude, p.coords.longitude]);
-        if (timer.current === null) {
-          setOn(true);
-          setStarting(false);
-          void send();
-          timer.current = window.setInterval(() => void send(), SEND_MS);
-        }
-      },
-      (err) => {
-        stop();
-        setMessage(err.code === err.PERMISSION_DENIED ? "Location permission denied." : "Couldn't get a GPS fix.");
-      },
-      { enableHighAccuracy: true, maximumAge: 5000, timeout: 20000 },
-    );
+    return new Promise((resolve) => {
+      const giveUp = window.setTimeout(() => {
+        setStarting(false);
+        resolve(false);
+      }, 10000);
+      watch.current = navigator.geolocation.watchPosition(
+        (p) => {
+          latest.current = p;
+          setPos([p.coords.latitude, p.coords.longitude]);
+          if (timer.current === null) {
+            setOn(true);
+            setStarting(false);
+            void send();
+            timer.current = window.setInterval(() => void send(), SEND_MS);
+            window.clearTimeout(giveUp);
+            resolve(true);
+          }
+        },
+        (err) => {
+          stop();
+          setMessage(err.code === err.PERMISSION_DENIED ? "Location permission denied." : "Couldn't get a GPS fix.");
+          window.clearTimeout(giveUp);
+          resolve(false);
+        },
+        { enableHighAccuracy: true, maximumAge: 5000, timeout: 20000 },
+      );
+    });
   }, [send, stop]);
 
   useEffect(() => stop, [stop]);

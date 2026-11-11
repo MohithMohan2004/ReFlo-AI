@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">ReFlow</string>
+    <string name="title_activity_main">ReFlow</string>
+    <string name="package_name">in.reflow.app</string>
+    <string name="custom_url_scheme">in.reflow.app</string>
+</resources>

@@ -96,6 +96,7 @@ body{font-family:'Inter',Arial,sans-serif;background:#f5f8fc;color:#172033;min-h
 }
 </style>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <link rel="stylesheet" href="{{ url_for('static', filename='responsive.css') }}">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -559,6 +560,6 @@ document.addEventListener("click",function(){accountMenu.classList.remove("open"
 setInterval(()=>loadMyOrders(false),5000);
 </script>
 
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+{% include "_tabbar.html" %}
 </body>
 </html>

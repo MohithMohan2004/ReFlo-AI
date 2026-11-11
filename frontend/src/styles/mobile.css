@@ -1,0 +1,327 @@
+/* ============================================================
+   Phone layout (≤760px) — app-style chrome in the spirit of
+   delivery apps: a bottom tab bar instead of a drawer, a compact
+   header, dense stat strips, chip filters and short maps, so the
+   things a user acts on fit on the first screen.
+   Desktop and tablet layouts are untouched.
+   ============================================================ */
+
+.tabbar { display: none; }
+
+@media (max-width: 760px) {
+  :root { --tabbar-h: 62px; }
+
+  /* ---------- Chrome: header + bottom tabs ---------- */
+  .shell[data-tabs="true"] .topbar .menu-btn { display: none; }
+  .shell[data-tabs="true"] .main { padding-bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom)); }
+
+  .topbar {
+    height: calc(56px + env(safe-area-inset-top));
+    padding: env(safe-area-inset-top) 14px 0 16px;
+    gap: 8px;
+  }
+  .topbar-title h1 { font-size: 17px; font-weight: 700; letter-spacing: -0.02em; }
+  .topbar-title p { font-size: 12px; }
+  .topbar-actions { gap: 2px; }
+  .user-btn { padding: 0 2px; gap: 0; }
+  .user-btn > svg:last-child { display: none; }
+  .user-btn .avatar { width: 34px !important; height: 34px !important; flex-basis: 34px !important; }
+
+  /* A plant picker in the header works like a delivery app's location bar */
+  .topbar:has(.plant-select) .topbar-title { display: none; }
+  .topbar:has(.plant-select) .topbar-actions { flex: 1; min-width: 0; }
+  .topbar .plant-select { flex: 1; min-width: 0; max-width: none; height: 38px; font-size: 14px; font-weight: 650; border-radius: 12px; }
+
+  .tabbar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 120;
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
+    height: calc(var(--tabbar-h) + env(safe-area-inset-bottom));
+    padding: 6px 6px env(safe-area-inset-bottom);
+    background: rgba(255, 255, 255, 0.9);
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
+    backdrop-filter: saturate(180%) blur(20px);
+    border-top: 1px solid rgba(15, 27, 45, 0.08);
+  }
+  .tab {
+    display: grid;
+    justify-items: center;
+    align-content: center;
+    gap: 2px;
+    min-width: 0;
+    color: var(--ink-500);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.005em;
+    text-decoration: none;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+  .tab span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tab svg {
+    box-sizing: content-box;
+    padding: 4px 16px;
+    border-radius: var(--r-pill);
+    transition: background var(--t-fast) var(--ease-out), transform var(--t-base) var(--ease);
+  }
+  .tab:active svg { transform: scale(0.92); transition-duration: var(--t-press); }
+  .tab.active { color: var(--brand); }
+  .tab.active svg { background: var(--brand-tint); }
+
+  /* Floating things sit above the tab bar */
+  .shell[data-tabs="true"] .chat-fab {
+    right: 14px;
+    bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 12px);
+    width: 46px;
+    height: 46px;
+  }
+  .shell[data-tabs="true"] .chat-panel {
+    right: 8px;
+    left: 8px;
+    width: auto;
+    bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 66px);
+    height: min(520px, calc(100vh - 200px));
+  }
+  body:has(.tabbar) .toasts {
+    left: 12px;
+    right: 12px;
+    width: auto;
+    bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 12px);
+  }
+
+  /* ---------- Surfaces: tighter, softer ---------- */
+  .page { padding: 12px 12px 20px; }
+  .mt-16 { margin-top: 12px; }
+  .grid, .split, .stack { gap: 12px; }
+  .card {
+    border-radius: 16px;
+    border-color: rgba(15, 27, 45, 0.06);
+    box-shadow: 0 1px 2px rgba(15, 27, 45, 0.04), 0 4px 14px -6px rgba(15, 27, 45, 0.08);
+  }
+  .card-head { padding: 14px 16px 12px; }
+  .card-head h2 { font-size: 16px; font-weight: 700; }
+  /* nowrap: a wrapping column line is as wide as its widest item (the chip row) */
+  .card-head.wrap { flex-direction: column; flex-wrap: nowrap; align-items: stretch; gap: 10px; }
+  .card-body { padding: 14px 16px 16px; }
+  .card-foot { padding: 12px 16px; border-radius: 0 0 16px 16px; }
+  .list-row { padding: 14px 16px; }
+  .empty { padding: 28px 20px; }
+
+  /* Bigger tap targets */
+  .btn { height: 42px; border-radius: 10px; }
+  .btn-sm { height: 36px; border-radius: 10px; }
+  .btn-icon { width: 40px; }
+  .btn-sm.btn-icon { width: 36px; }
+  .input, .select { height: 44px; border-radius: 10px; font-size: 15px; }
+
+  /* ---------- Filters: scrollable chips instead of a segmented bar ---------- */
+  .card-head .segmented,
+  .orders-filter .segmented {
+    display: flex;
+    width: auto;
+    margin: 0 -16px;
+    padding: 0 16px 2px;
+    gap: 6px;
+    background: none;
+    border: 0;
+    border-radius: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .card-head .segmented::-webkit-scrollbar,
+  .orders-filter .segmented::-webkit-scrollbar { display: none; }
+  .card-head .segmented button,
+  .orders-filter .segmented button {
+    flex: 0 0 auto;
+    height: 34px;
+    padding: 0 14px;
+    border: 1px solid var(--line-strong);
+    border-radius: var(--r-pill);
+    background: var(--surface);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ink-700);
+  }
+  .card-head .segmented button[aria-pressed="true"],
+  .orders-filter .segmented button[aria-pressed="true"] {
+    background: var(--ink-900);
+    border-color: var(--ink-900);
+    color: #fff;
+    box-shadow: none;
+  }
+  .segmented button[aria-pressed="true"] .count { color: rgba(255, 255, 255, 0.7); }
+
+  /* ---------- Stats: two-up tiles, or a four-up strip ---------- */
+  .grid-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .stat { padding: 12px 14px; gap: 3px; }
+  .stat-label { font-size: 12px; gap: 6px; }
+  .stat-value { font-size: 22px; }
+  .stat-value small { font-size: 12px; }
+  .stat-hint { font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  .stat-strip { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+  .stat-strip .stat { padding: 10px 6px 9px; justify-items: center; text-align: center; border-radius: 14px; }
+  .stat-strip .stat-label { flex-direction: column; gap: 3px; font-size: 11px; line-height: 1.2; font-weight: 600; }
+  .stat-strip .stat-label svg { color: var(--brand); }
+  .stat-strip .stat-value { font-size: 19px; order: -1; }
+  .stat-strip .stat-hint { display: none; }
+
+  /* ---------- Maps: shorter, cleaner, pinch to zoom ---------- */
+  .hero-map { height: 38vh; min-height: 240px; max-height: 360px; }
+  .map .leaflet-control-zoom { display: none; }
+  .hero-map-card .map-chip { left: 10px; top: 10px; max-width: calc(100% - 20px); }
+  .map-overlay { left: 8px; bottom: 8px; gap: 8px; padding: 5px 8px; font-size: 11px; }
+  .map-panel { left: 8px; right: 8px; bottom: 8px; padding: 14px; gap: 10px; border-radius: 14px; }
+
+  /* ---------- Dialogs become bottom sheets ---------- */
+  .dialog-scrim { place-items: end stretch; padding: 0; }
+  .dialog {
+    width: 100%;
+    max-height: 90vh;
+    border-radius: 20px 20px 0 0;
+    padding-bottom: env(safe-area-inset-bottom);
+    animation-name: sheetIn;
+  }
+  .dialog-actions .btn { flex: 1; }
+}
+
+@keyframes sheetIn { from { transform: translateY(40px); } to { transform: none; } }
+
+/* ============================================================
+   Map-first pages on phones (AppShell mapFirst + <MapSheet>):
+   the map fills the screen, the header floats, and everything
+   else lives in a draggable bottom sheet — like ride-hailing apps.
+   ============================================================ */
+@media (max-width: 760px) {
+  .shell[data-map-first="true"] {
+    --float-top: calc(env(safe-area-inset-top) + 10px);
+    --sheet-top: calc(env(safe-area-inset-top) + 78px);
+    --sheet-bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom));
+  }
+  .shell[data-map-first="true"] .main { padding-bottom: 0; }
+
+  /* Floating header card */
+  .shell[data-map-first="true"] .topbar {
+    position: fixed;
+    top: var(--float-top);
+    left: 10px;
+    right: 10px;
+    height: 58px;
+    padding: 0 8px 0 16px;
+    border: 1px solid rgba(15, 27, 45, 0.06);
+    border-radius: 18px;
+    background: rgba(255, 255, 255, 0.92);
+    box-shadow: 0 2px 6px rgba(15, 27, 45, 0.06), 0 12px 28px -10px rgba(15, 27, 45, 0.22);
+    z-index: 110;
+  }
+
+  /* The map takes the whole screen behind everything */
+  .shell[data-map-first="true"] .page { padding: 0; max-width: none; }
+  .shell[data-map-first="true"] .page > .notice {
+    position: fixed; z-index: 105; left: 10px; right: 10px; top: var(--sheet-top);
+  }
+  .shell[data-map-first="true"] .hero-map-card,
+  .shell[data-map-first="true"] .map-card {
+    position: fixed;
+    inset: 0 0 var(--sheet-bottom) 0;
+    z-index: 0;
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    animation: none;
+  }
+  .shell[data-map-first="true"] .hero-map,
+  .shell[data-map-first="true"] .demand-map { height: 100%; min-height: 0; max-height: none; }
+  .shell[data-map-first="true"] .map-overlay { display: none; }
+  .shell[data-map-first="true"] .leaflet-control-attribution { display: none; }
+  .shell[data-map-first="true"] .hero-map-card .map-chip { top: var(--sheet-top); left: 10px; }
+
+  /* Juno and toasts float at the top, clear of the sheet */
+  .shell[data-map-first="true"] .chat-fab {
+    top: calc(var(--sheet-top) + 2px);
+    bottom: auto;
+    right: 10px;
+    width: 42px;
+    height: 42px;
+    background: rgba(255, 255, 255, 0.95);
+    color: var(--ink-900);
+    border: 1px solid rgba(15, 27, 45, 0.08);
+  }
+  .shell[data-map-first="true"] .chat-panel { top: calc(var(--sheet-top) + 52px); bottom: var(--sheet-bottom); height: auto; transform-origin: top right; }
+  body:has(.shell[data-map-first="true"]) .toasts { top: var(--sheet-top); bottom: auto; }
+
+  /* ---------- The sheet ---------- */
+  .sheet {
+    position: fixed;
+    left: 0;
+    right: 0;
+    top: var(--sheet-top);
+    bottom: var(--sheet-bottom);
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    background: var(--bg);
+    border-radius: 22px 22px 0 0;
+    box-shadow: 0 -1px 0 rgba(15, 27, 45, 0.05), 0 -12px 32px -12px rgba(15, 27, 45, 0.28);
+    transform: translate3d(0, 100%, 0);
+    will-change: transform;
+    overscroll-behavior: contain;
+    touch-action: pan-x; /* vertical drags move the sheet */
+  }
+  .sheet-grab {
+    flex: 0 0 auto;
+    display: grid;
+    place-items: center;
+    height: 22px;
+    width: 100%;
+    padding: 0;
+    border: 0;
+    background: none;
+    touch-action: none;
+    cursor: grab;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .sheet-grab span { width: 40px; height: 5px; border-radius: 3px; background: var(--ink-300); transition: background var(--t-fast) var(--ease-out), width var(--t-base) var(--ease); }
+  .sheet-grab:active span { background: var(--ink-400); width: 48px; }
+  .sheet-body {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 2px 12px 16px;
+    overflow: hidden;
+  }
+  .sheet[data-snap="full"] { touch-action: pan-y; }
+  .sheet[data-snap="full"] .sheet-body { overflow-y: auto; -webkit-overflow-scrolling: touch; }
+  .sheet-body > * { margin-top: 0 !important; flex: 0 0 auto; }
+  .sheet-body > .current-job { order: -1; }
+  .sheet-body > .map-panel {
+    order: -2;
+    position: static;
+    width: auto;
+    max-height: none;
+    overflow: visible;
+    animation: none;
+    background: var(--surface);
+    box-shadow: 0 1px 2px rgba(15, 27, 45, 0.04), 0 4px 14px -6px rgba(15, 27, 45, 0.08);
+    border-color: var(--info-line);
+  }
+  .sheet .tanker-grid, .sheet .demand-grid, .sheet .split { gap: 12px; }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .shell[data-map-first="true"] .topbar { background: #fff; }
+}
+
+/* Fully open sheet: Juno steps aside instead of covering content */
+@media (max-width: 760px) {
+  .shell[data-map-first="true"] .chat-fab { transition: transform var(--t-base) var(--ease); }
+  body:has(.sheet[data-snap="full"]) .chat-fab { transform: scale(0); pointer-events: none; }
+}
