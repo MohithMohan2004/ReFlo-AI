@@ -12,6 +12,7 @@ import { UserMenu } from "../components/UserMenu";
 import { ChatWidget } from "../components/ChatWidget";
 import { ForecastChart } from "../components/ForecastChart";
 import { FitBounds, MapFrame, pinIcon, dotIcon } from "../components/map";
+import { MapSheet, setSheet, useIsPhone } from "../components/MapSheet";
 import { OcemsGrid } from "../components/OcemsGrid";
 import { Dialog } from "../components/Dialog";
 import { Empty, Notice, Segmented, SkeletonRows, Spinner, Stat, StatusBadge } from "../components/ui";
@@ -64,6 +65,8 @@ export default function Supply() {
   const [pricingOpen, setPricingOpen] = useState(false);
   const [requestOpen, setRequestOpen] = useState(false);
   const mapRef = useRef<HTMLElement>(null);
+  const phone = useIsPhone();
+  const SHEET_PEEK = 230;
 
   const demands = useMemo(
     () => [...(ov.data?.demands ?? [])].sort((a, b) => String(b.created_at).localeCompare(String(a.created_at))),
@@ -84,7 +87,8 @@ export default function Supply() {
 
   function view(next: Focus) {
     setFocus(next);
-    mapRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    if (phone) setSheet("peek");
+    else mapRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
   async function act(kind: "order" | "transfer", id: string, action: "accept" | "reject") {
@@ -129,65 +133,8 @@ export default function Supply() {
     </select>
   );
 
-  return (
-    <AppShell
-      nav={roleNav.stp!}
-      title={stp ? stp.stp_name : "Plant overview"}
-      subtitle={stp ? `${stp.stp_id} · ${stp.quality_grade || "General"} grade${stp.technology && stp.technology !== "Not Specified" ? ` · ${stp.technology}` : ""}` : "Capacity, orders and quality for your plant"}
-      actions={
-        <>
-          {selector}
-          <button type="button" className="btn btn-ghost btn-icon" onClick={ov.reload} aria-label="Refresh" title="Refresh">
-            {ov.loading ? <Spinner /> : <RefreshCw />}
-          </button>
-          <UserMenu />
-        </>
-      }
-    >
-      <main className="page supply">
-        {ov.error && <Notice tone="danger">{ov.error}</Notice>}
+  const panel = (focusedOrder || focusedTransfer) && (
 
-        {!ov.loading && !stp ? (
-          <div className="card">
-            <Empty icon={Factory} title="Choose your plant">
-              Select the treatment plant you operate from the menu at the top to see its orders and capacity.
-            </Empty>
-          </div>
-        ) : (
-          <>
-            {/* MAP — the centrepiece */}
-            <section className="card hero-map-card" ref={mapRef} aria-label="Delivery map">
-              <MapFrame className="hero-map" center={plantPt ?? undefined} zoom={12} scrollZoom>
-                <FitBounds padRight={focus && window.innerWidth > 760 ? 352 : 0} bounds={fit} fitKey={`${stp?.stp_id}|${focus?.id ?? ""}|${route ? 1 : 0}|${mapped.length}`} />
-                {route && <Polyline positions={route.coords} pathOptions={{ color: "#ffffff", weight: 9, opacity: 0.9 }} />}
-                {route && <Polyline positions={route.coords} pathOptions={{ color: "#1463d6", weight: 5 }} />}
-                {mapped.map(({ d, pt }) => {
-                  const b = bucketOf(d.status);
-                  const on = focusedOrder?.request_id === d.request_id;
-                  if (b === "completed" && !on) return null;
-                  return (
-                    <Marker key={d.request_id} position={pt!} icon={on ? pinIcon("drop", "brand") : dotIcon(BUCKET_COLOR[b])} zIndexOffset={on ? 800 : 0}
-                      eventHandlers={{ click: () => setFocus({ kind: "order", id: d.request_id }) }}>
-                      <Popup><strong>{d.request_id}</strong><br />{num(d.quantity)} KLD · {d.status}</Popup>
-                    </Marker>
-                  );
-                })}
-                {destStp && focusPt && <Marker position={focusPt} icon={pinIcon("plant", "ink")} zIndexOffset={800} />}
-                {plantPt && <Marker position={plantPt} icon={pinIcon("plant", "success")} zIndexOffset={900}><Popup><strong>{stp?.stp_name}</strong><br />Your plant</Popup></Marker>}
-              </MapFrame>
-
-              <div className="map-chip">
-                <span className="live-dot" /> {stp?.stp_name ?? "Plant"}
-                <span className="muted num">· {num(availKld)} KLD free</span>
-              </div>
-
-              <div className="map-overlay">
-                <span><span className="legend-dot" style={{ background: "var(--success)" }} />Your plant</span>
-                <span><span className="legend-dot" style={{ background: BUCKET_COLOR.pending }} />Pending</span>
-                <span><span className="legend-dot" style={{ background: BUCKET_COLOR.active }} />In delivery</span>
-              </div>
-
-              {(focusedOrder || focusedTransfer) && (
                 <aside className="map-panel" aria-live="polite">
                   <header className="row-between">
                     <div className="row" style={{ gap: 8 }}>
@@ -228,10 +175,73 @@ export default function Supply() {
                     </div>
                   )}
                 </aside>
-              )}
+  );
+
+  return (
+    <AppShell
+      mapFirst={!(!ov.loading && !stp)}
+      nav={roleNav.stp!}
+      title={stp ? stp.stp_name : "Plant overview"}
+      subtitle={stp ? `${stp.stp_id} · ${stp.quality_grade || "General"} grade${stp.technology && stp.technology !== "Not Specified" ? ` · ${stp.technology}` : ""}` : "Capacity, orders and quality for your plant"}
+      actions={
+        <>
+          {selector}
+          <button type="button" className="btn btn-ghost btn-icon" onClick={ov.reload} aria-label="Refresh" title="Refresh">
+            {ov.loading ? <Spinner /> : <RefreshCw />}
+          </button>
+          <UserMenu />
+        </>
+      }
+    >
+      <main className="page supply">
+        {ov.error && <Notice tone="danger">{ov.error}</Notice>}
+
+        {!ov.loading && !stp ? (
+          <div className="card">
+            <Empty icon={Factory} title="Choose your plant">
+              Select the treatment plant you operate from the menu at the top to see its orders and capacity.
+            </Empty>
+          </div>
+        ) : (
+          <>
+            {/* MAP — the centrepiece */}
+            <section className="card hero-map-card" ref={mapRef} aria-label="Delivery map">
+              <MapFrame className="hero-map" center={plantPt ?? undefined} zoom={12} scrollZoom>
+                <FitBounds padRight={focus && !phone ? 352 : 0} padTop={phone ? 80 : 0} padBottom={phone ? SHEET_PEEK : 0} bounds={fit} fitKey={`${stp?.stp_id}|${focus?.id ?? ""}|${route ? 1 : 0}|${mapped.length}`} />
+                {route && <Polyline positions={route.coords} pathOptions={{ color: "#ffffff", weight: 9, opacity: 0.9 }} />}
+                {route && <Polyline positions={route.coords} pathOptions={{ color: "#1463d6", weight: 5 }} />}
+                {mapped.map(({ d, pt }) => {
+                  const b = bucketOf(d.status);
+                  const on = focusedOrder?.request_id === d.request_id;
+                  if (b === "completed" && !on) return null;
+                  return (
+                    <Marker key={d.request_id} position={pt!} icon={on ? pinIcon("drop", "brand") : dotIcon(BUCKET_COLOR[b])} zIndexOffset={on ? 800 : 0}
+                      eventHandlers={{ click: () => setFocus({ kind: "order", id: d.request_id }) }}>
+                      <Popup><strong>{d.request_id}</strong><br />{num(d.quantity)} KLD · {d.status}</Popup>
+                    </Marker>
+                  );
+                })}
+                {destStp && focusPt && <Marker position={focusPt} icon={pinIcon("plant", "ink")} zIndexOffset={800} />}
+                {plantPt && <Marker position={plantPt} icon={pinIcon("plant", "success")} zIndexOffset={900}><Popup><strong>{stp?.stp_name}</strong><br />Your plant</Popup></Marker>}
+              </MapFrame>
+
+              <div className="map-chip">
+                <span className="live-dot" /> {stp?.stp_name ?? "Plant"}
+                <span className="muted num">· {num(availKld)} KLD free</span>
+              </div>
+
+              <div className="map-overlay">
+                <span><span className="legend-dot" style={{ background: "var(--success)" }} />Your plant</span>
+                <span><span className="legend-dot" style={{ background: BUCKET_COLOR.pending }} />Pending</span>
+                <span><span className="legend-dot" style={{ background: BUCKET_COLOR.active }} />In delivery</span>
+              </div>
+
+              {!phone && panel}
             </section>
 
-            <section className="grid grid-4 mt-16">
+            <MapSheet peek={SHEET_PEEK} label="Plant orders and capacity">
+            {phone && panel}
+            <section className="grid grid-4 mt-16 stat-strip supply-stats">
               <Stat icon={Droplets} label="Available today" value={ov.data ? num(availKld) : "—"} unit="KLD"
                 hint={totalKld ? <Meter pct={usedPct} label={`${Math.round(usedPct)}% of ${num(totalKld)} KLD allocated`} /> : "Capacity not set"} />
               <Stat icon={Inbox} label="Pending requests" value={ov.data ? pendingCount : "—"} hint="Orders and transfers to review" />
@@ -368,6 +378,7 @@ export default function Supply() {
                 <PricingCard pricing={ov.data?.pricing ?? null} onEdit={() => setPricingOpen(true)} />
               </aside>
             </div>
+            </MapSheet>
           </>
         )}
       </main>

@@ -72,3 +72,28 @@
 .order-list .list-row:hover .order-go, .order-link:focus-visible .order-go { opacity: 1; }
 .more-row { padding: 10px 20px !important; font-size: 13px; }
 .more-row a { font-weight: 600; text-decoration: none; }
+
+/* Phone: one compact request card, then a short map and the match */
+@media (max-width: 760px) {
+  .search-bar { grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr) minmax(0, 1fr); gap: 10px 8px; padding: 14px; }
+  .search-bar .addr, .search-bar .submit, .search-bar .search-status { grid-column: 1 / -1; }
+  .search-bar .field-label { font-size: 11.5px; }
+  .search-bar .submit .field-label { display: none; }
+  .search-bar .submit .btn { width: 100%; height: 46px; border-radius: 12px; font-size: 15px; }
+  .search-bar .select { padding: 0 24px 0 10px; background-position: right 8px center; font-size: 14px; }
+  .search-bar .input-suffix .input { padding-right: 38px; }
+  .search-bar .input-suffix span { right: 9px; font-size: 11.5px; }
+  .search-status { min-height: 0; font-size: 12px; }
+  .search-status:has(> .muted) { display: none; }
+  .search-status strong { max-width: 100%; white-space: normal; display: inline; }
+  .match { gap: 14px; }
+  .match-figures dd { font-size: 14px; }
+  .orders-filter { padding: 0 16px; }
+  .order-go { opacity: 1; }
+  .order-list .list-row { padding: 12px 16px; }
+}
+
+/* In the phone sheet: once a plant is found, the match leads and the form follows */
+@media (max-width: 760px) {
+  .sheet-body:has(.match) > .search-bar { order: 2; }
+}

@@ -927,3 +927,32 @@ h4, h5 { letter-spacing: -0.005em; line-height: 1.35; }
   -webkit-background-clip: text;
   background-clip: text;
 }
+
+/* ============================================================
+   Phone bottom tab bar (templates/_tabbar.html) — matches the
+   React AppShell tab bar so navigation never disappears.
+   ============================================================ */
+.app-tabbar { display: none; }
+@media (max-width: 760px) {
+  body:has(.app-tabbar) { padding-bottom: calc(62px + env(safe-area-inset-bottom)) !important; }
+  .app-tabbar {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 2000;
+    display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr);
+    height: calc(62px + env(safe-area-inset-bottom));
+    padding: 6px 6px env(safe-area-inset-bottom);
+    background: rgba(255, 255, 255, 0.9);
+    -webkit-backdrop-filter: saturate(180%) blur(20px); backdrop-filter: saturate(180%) blur(20px);
+    border-top: 1px solid rgba(15, 27, 45, 0.08);
+    font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", system-ui, sans-serif;
+  }
+  .app-tab {
+    display: grid; justify-items: center; align-content: center; gap: 2px; min-width: 0;
+    color: #5f6e82; font-size: 11px; font-weight: 600; text-decoration: none;
+    -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+  }
+  .app-tab svg { box-sizing: content-box; padding: 4px 16px; border-radius: 999px; transition: background 140ms ease-out, transform 220ms cubic-bezier(0.22, 1, 0.36, 1); }
+  .app-tab:active svg { transform: scale(0.92); }
+  .app-tab.active { color: #1463d6; }
+  .app-tab.active svg { background: rgba(20, 99, 214, 0.08); }
+  .app-tab:hover { text-decoration: none; }
+}

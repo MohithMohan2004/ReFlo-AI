@@ -8,6 +8,8 @@ export interface NavItem {
   label: string;
   href: string;
   icon: LucideIcon;
+  /** Short label for the phone tab bar */
+  short?: string;
   /** true = rendered by React Router; false = full page load to a Flask page */
   spa?: boolean;
 }
@@ -37,8 +39,8 @@ export const roleNav: Record<string, NavSection[]> = {
     {
       label: "Water",
       items: [
-        { label: "Find water", href: "/demand", icon: Droplets, spa: true },
-        { label: "My orders", href: "/track", icon: ClipboardList },
+        { label: "Find water", short: "Water", href: "/demand", icon: Droplets, spa: true },
+        { label: "My orders", short: "Orders", href: "/track", icon: ClipboardList },
       ],
     },
     { label: "Account", items: [{ label: "Profile", href: "/profile", icon: UserRound, spa: true }] },
@@ -47,9 +49,9 @@ export const roleNav: Record<string, NavSection[]> = {
     {
       label: "Plant",
       items: [
-        { label: "Overview", href: "/supply", icon: LayoutGrid, spa: true },
-        { label: "Order tracking", href: "/stp_track", icon: MapPinned },
-        { label: "OCEMS readings", href: "/supply_ocems", icon: Gauge },
+        { label: "Overview", short: "Plant", href: "/supply", icon: LayoutGrid, spa: true },
+        { label: "Order tracking", short: "Orders", href: "/stp_track", icon: MapPinned },
+        { label: "OCEMS readings", short: "Quality", href: "/supply_ocems", icon: Gauge },
       ],
     },
     { label: "Account", items: [{ label: "Profile", href: "/profile", icon: UserRound, spa: true }] },
@@ -58,9 +60,9 @@ export const roleNav: Record<string, NavSection[]> = {
     {
       label: "Operations",
       items: [
-        { label: "Dashboard", href: "/tanker", icon: LayoutGrid, spa: true },
-        { label: "Trip history", href: "/trip_history", icon: Route, spa: true },
-        { label: "Fleet & documents", href: "/tanker/reports", icon: ChartColumn, spa: true },
+        { label: "Dashboard", short: "Jobs", href: "/tanker", icon: LayoutGrid, spa: true },
+        { label: "Trip history", short: "Trips", href: "/trip_history", icon: Route, spa: true },
+        { label: "Fleet & documents", short: "Fleet", href: "/tanker/reports", icon: ChartColumn, spa: true },
       ],
     },
     { label: "Account", items: [{ label: "Profile", href: "/profile", icon: UserRound, spa: true }] },

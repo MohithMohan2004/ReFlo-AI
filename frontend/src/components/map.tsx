@@ -65,17 +65,27 @@ export function MapFrame({ children, center = BENGALURU, zoom = 11, height, aspe
 }
 
 /** Fit to bounds whenever the key changes (new search, new data). */
-export function FitBounds({ bounds, fitKey, maxZoom = 15, padRight = 0 }: { bounds: LatLngBoundsExpression | null; fitKey: string; maxZoom?: number; padRight?: number }) {
+export function FitBounds({ bounds, fitKey, maxZoom = 15, padRight = 0, padTop = 0, padBottom = 0 }: {
+  bounds: LatLngBoundsExpression | null; fitKey: string; maxZoom?: number;
+  /** Extra room for UI floating over the map (side panel, phone header, bottom sheet). */
+  padRight?: number; padTop?: number; padBottom?: number;
+}) {
   const map = useMap();
   const boundsRef = useRef(bounds);
   boundsRef.current = bounds;
   const userMoved = useRef(false);
-  const padRightRef = useRef(padRight);
-  padRightRef.current = padRight;
+  const pad = useRef({ padRight, padTop, padBottom });
+  pad.current = { padRight, padTop, padBottom };
+  const opts = () => ({
+    paddingTopLeft: [48, 48 + pad.current.padTop] as [number, number],
+    paddingBottomRight: [48 + pad.current.padRight, 48 + pad.current.padBottom] as [number, number],
+    maxZoom,
+    animate: false,
+  });
 
   useEffect(() => {
     userMoved.current = false;
-    if (bounds) map.fitBounds(bounds, { paddingTopLeft: [48, 48], paddingBottomRight: [48 + padRight, 48], maxZoom, animate: false });
+    if (bounds) map.fitBounds(bounds, opts());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fitKey]);
 
@@ -87,7 +97,7 @@ export function FitBounds({ bounds, fitKey, maxZoom = 15, padRight = 0 }: { boun
     map.getContainer().addEventListener("wheel", onUser, { passive: true });
     const ro = new ResizeObserver(() => {
       map.invalidateSize();
-      if (!userMoved.current && boundsRef.current) map.fitBounds(boundsRef.current, { paddingTopLeft: [48, 48], paddingBottomRight: [48 + padRightRef.current, 48], maxZoom, animate: false });
+      if (!userMoved.current && boundsRef.current) map.fitBounds(boundsRef.current, opts());
     });
     ro.observe(map.getContainer());
     return () => {

@@ -192,7 +192,7 @@
         .timeline li:not(.done) strong { color: var(--muted); font-weight: 600; }
 
         /* ---------- Payment dialogs ---------- */
-        .modal { position: fixed; inset: 0; z-index: 50; display: none; place-items: center; padding: 20px; background: rgba(8, 18, 32, .55); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); }
+        .modal { position: fixed; inset: 0; z-index: 3000; display: none; place-items: center; padding: 20px; background: rgba(8, 18, 32, .55); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); }
         .modal.show { display: grid; }
         .sheet { width: min(440px, 100%); background: #fff; border-radius: 20px; padding: 24px; box-shadow: 0 24px 60px -16px rgba(0,0,0,.45); transform-origin: center bottom; }
         @media (prefers-reduced-motion: no-preference) {
@@ -632,5 +632,6 @@
 })();
 </script>
 
+{% include "_tabbar.html" %}
 </body>
 </html>

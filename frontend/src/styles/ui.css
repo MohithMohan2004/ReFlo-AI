@@ -862,3 +862,25 @@
   -webkit-background-clip: text;
   background-clip: text;
 }
+
+/* ============================================================
+   Cascade — content settles in one piece after another.
+   Transform only (never hide content behind opacity), fill
+   "backwards" so nothing keeps a transform after it lands.
+   ============================================================ */
+@keyframes rise { from { transform: translate3d(0, 14px, 0); } to { transform: none; } }
+.page > *:not(.hero-map-card):not(.map-card):not(.sheet),
+.cascade > *,
+.list > .list-row,
+.grid > .card {
+  animation: rise 560ms var(--ease) backwards;
+  animation-delay: calc(var(--cascade-i, 0) * 45ms);
+}
+:is(.page, .cascade, .list, .grid) > :nth-child(2) { --cascade-i: 1; }
+:is(.page, .cascade, .list, .grid) > :nth-child(3) { --cascade-i: 2; }
+:is(.page, .cascade, .list, .grid) > :nth-child(4) { --cascade-i: 3; }
+:is(.page, .cascade, .list, .grid) > :nth-child(5) { --cascade-i: 4; }
+:is(.page, .cascade, .list, .grid) > :nth-child(6) { --cascade-i: 5; }
+:is(.page, .cascade, .list, .grid) > :nth-child(7) { --cascade-i: 6; }
+:is(.page, .cascade, .list, .grid) > :nth-child(8) { --cascade-i: 7; }
+:is(.page, .cascade, .list, .grid) > :nth-child(n + 9) { --cascade-i: 8; }

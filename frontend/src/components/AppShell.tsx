@@ -2,7 +2,8 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Link, NavLink, useLocation } from "react-router-dom";
 import { Menu, PanelLeftClose, X } from "lucide-react";
 import { BrandMark, Wordmark } from "./BrandMark";
-import type { NavSection } from "./nav";
+import { roleNav, type NavSection } from "./nav";
+import { useSession } from "../lib/session";
 
 const STORAGE_KEY = "reflow.sidebar.collapsed";
 
@@ -20,10 +21,16 @@ interface Props {
   subtitle?: ReactNode;
   actions?: ReactNode;
   sidebarFoot?: ReactNode;
+  /** Phones: full-screen map with a floating header; page content goes in a <MapSheet>. */
+  mapFirst?: boolean;
   children: ReactNode;
 }
 
-export function AppShell({ nav, title, subtitle, actions, sidebarFoot, children }: Props) {
+export function AppShell({ nav, title, subtitle, actions, sidebarFoot, mapFirst = false, children }: Props) {
+  // Signed-in users always get their role's phone tab bar, on every page.
+  const user = useSession();
+  const roleTabs = user?.logged_in ? roleNav[user.role] : undefined;
+  const tabs = (roleTabs ?? (Object.values(roleNav).includes(nav) ? nav : [])).flatMap((s) => s.items).slice(0, 5);
   const [collapsed, setCollapsed] = useState(readCollapsed);
   const [mobileOpen, setMobileOpen] = useState(false);
   const location = useLocation();
@@ -45,7 +52,7 @@ export function AppShell({ nav, title, subtitle, actions, sidebarFoot, children 
   }, []);
 
   return (
-    <div className="shell" data-collapsed={collapsed} data-mobile-open={mobileOpen}>
+    <div className="shell" data-collapsed={collapsed} data-mobile-open={mobileOpen} data-tabs={tabs.length > 1} data-map-first={mapFirst}>
       <aside className="sidebar" aria-label="Primary">
         <div className="sidebar-head">
           <Link to="/" className="sidebar-brand" aria-label="ReFlow home">
@@ -116,6 +123,26 @@ export function AppShell({ nav, title, subtitle, actions, sidebarFoot, children 
         </header>
         {children}
       </div>
+
+      {/* Phone navigation: a bottom tab bar replaces the drawer (≤760px) */}
+      {tabs.length > 1 && (
+        <nav className="tabbar" aria-label="Sections">
+          {tabs.map((item) => {
+            const Icon = item.icon;
+            const inner = (
+              <>
+                <Icon size={21} strokeWidth={1.8} aria-hidden="true" />
+                <span>{item.short ?? item.label}</span>
+              </>
+            );
+            return item.spa ? (
+              <NavLink key={item.href} to={item.href} end className="tab">{inner}</NavLink>
+            ) : (
+              <a key={item.href} href={item.href} className="tab">{inner}</a>
+            );
+          })}
+        </nav>
+      )}
     </div>
   );
 }

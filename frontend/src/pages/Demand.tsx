@@ -10,6 +10,7 @@ import { roleNav } from "../components/nav";
 import { UserMenu } from "../components/UserMenu";
 import { ChatWidget } from "../components/ChatWidget";
 import { FitBounds, InvalidateOnResize, MapFrame, pinIcon } from "../components/map";
+import { MapSheet, setSheet, useIsPhone } from "../components/MapSheet";
 import { OcemsGrid } from "../components/OcemsGrid";
 import { Badge, Empty, Notice, Segmented, SkeletonRows, Spinner, StatusBadge } from "../components/ui";
 import { applyFilter, bucketOf, filterOptions, type OrderFilter } from "../lib/orders";
@@ -43,6 +44,8 @@ export default function Demand() {
 
   const { data: stps } = useAsync((s) => getJSON<Stp[]>("/api/stps", s));
   const orders = useAsync((s) => getJSON<MyOrder[]>("/api/my_orders", s));
+  const phone = useIsPhone();
+  const SHEET_PEEK = 290;
 
   // Form
   const [address, setAddress] = useState("");
@@ -146,6 +149,11 @@ export default function Demand() {
       if (seq !== searchSeq.current) return;
       if (data.error) throw new Error(data.error);
       setResult(data);
+      // Phones: close the keyboard and lower the sheet so the match and its route show together.
+      if (phone) {
+        (document.activeElement as HTMLElement | null)?.blur();
+        setSheet("peek");
+      }
       const n = data.nearest_stp;
       if (!n || n.latitude == null || n.longitude == null) return;
 
@@ -218,9 +226,7 @@ export default function Demand() {
   const allOrders = orders.data ?? [];
   const shownOrders = applyFilter(allOrders, orderFilter, (o) => o.status);
 
-  return (
-    <AppShell nav={roleNav.demand!} title="Find treated water" subtitle="Match your site with the nearest plant that can supply it" actions={<UserMenu />}>
-      <main className="page demand">
+  const searchForm = (
         <form className="card search-bar" onSubmit={findPlant} noValidate>
           <div className="field addr">
             <label className="field-label" htmlFor="addr">Delivery point</label>
@@ -311,13 +317,13 @@ export default function Demand() {
             )}
           </p>
         </form>
-
-        <div className="demand-grid">
+  );
+  const mapEl = (
           <section className="card map-card" aria-label="Route map">
             <MapFrame className="demand-map" scrollZoom>
               <InvalidateOnResize />
               <PickPoint onPick={(lat, lon) => choose(lat, lon, `Pinned location (${lat.toFixed(5)}, ${lon.toFixed(5)})`)} />
-              <FitBounds bounds={fit} fitKey={fitKey} />
+              <FitBounds bounds={fit} fitKey={fitKey} padTop={phone ? 80 : 0} padBottom={phone ? SHEET_PEEK : 0} />
               {(stps ?? []).filter((s) => s.latitude && s.longitude && s.stp_id !== nearest?.stp_id).map((s) => (
                 <Marker key={s.stp_id} position={[s.latitude!, s.longitude!]} icon={pinIcon("plant", "ink")} opacity={nearest ? 0.45 : 0.9}>
                   <Popup><strong>{s.stp_name}</strong><br />{s.quality_grade || "General"} grade</Popup>
@@ -355,7 +361,8 @@ export default function Demand() {
               <span><span className="legend-dot" style={{ background: "var(--ink-800)" }} />Other plants</span>
             </div>
           </section>
-
+  );
+  const side = (
           <aside className="stack">
             <section className="card" aria-live="polite">
               <header className="card-head">
@@ -457,7 +464,28 @@ export default function Demand() {
               )}
             </section>
           </aside>
-        </div>
+  );
+
+  return (
+    <AppShell mapFirst nav={roleNav.demand!} title="Find treated water" subtitle="Match your site with the nearest plant that can supply it" actions={<UserMenu />}>
+      <main className="page demand">
+        {phone ? (
+          <>
+            {mapEl}
+            <MapSheet peek={SHEET_PEEK} label="Request water">
+              {searchForm}
+              {side}
+            </MapSheet>
+          </>
+        ) : (
+          <>
+            {searchForm}
+            <div className="demand-grid">
+              {mapEl}
+              {side}
+            </div>
+          </>
+        )}
 
       </main>
       <ChatWidget role="demand" />

@@ -33,3 +33,8 @@
   .req-actions .btn { flex: 1; }
   .plant-select { max-width: 140px; }
 }
+
+/* Phone */
+@media (max-width: 760px) {
+  .req-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
