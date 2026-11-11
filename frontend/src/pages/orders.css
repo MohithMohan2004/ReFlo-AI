@@ -1,0 +1,77 @@
+/* Orders (buyer /track, plant /stp_track). Theme tokens only, so it works in light and dark. */
+.orders-tools { gap: 10px; }
+.orders-search { width: 260px; max-width: 100%; }
+
+.order-row { display: grid; gap: 14px; transition: background var(--t-fast) var(--ease-out); }
+.order-row[data-open="true"] { background: var(--surface-2); }
+
+.order-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.order-id { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.order-id strong { display: block; font-size: 14px; }
+.order-id .muted { display: block; font-size: 12.5px; }
+.order-icon {
+  width: 36px; height: 36px; flex: 0 0 36px; border-radius: var(--r-md);
+  display: grid; place-items: center; background: var(--brand-tint); color: var(--brand);
+}
+
+.order-facts {
+  margin: 0; display: grid; gap: 10px 18px;
+  grid-template-columns: repeat(5, minmax(0, auto));
+  justify-content: start;
+}
+.order-facts > div { min-width: 0; }
+.order-facts .wide { max-width: 320px; }
+.order-facts dt { font-size: 11.5px; font-weight: 600; color: var(--ink-500); letter-spacing: 0.02em; }
+.order-facts dd { margin: 2px 0 0; font-size: 13.5px; font-weight: 550; color: var(--ink-900); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.order-facts.compact { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.order-facts.compact .wide { grid-column: 1 / -1; max-width: none; }
+.order-facts.compact dd { white-space: normal; }
+
+.order-steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.order-steps li { position: relative; display: grid; justify-items: center; gap: 6px; text-align: center; }
+.order-steps li + li::before {
+  content: ""; position: absolute; top: 12px; right: 50%; width: 100%; height: 2px;
+  background: var(--line-strong); z-index: 0;
+}
+.order-steps li[data-state="done"]::before,
+.order-steps li[data-state="current"]::before { background: var(--success); }
+.order-steps .dot {
+  position: relative; z-index: 1; width: 26px; height: 26px; border-radius: 50%;
+  display: grid; place-items: center; font-size: 12px; font-weight: 700;
+  background: var(--surface); color: var(--ink-500); border: 1.5px solid var(--line-strong);
+}
+.order-steps li[data-state="done"] .dot { background: var(--success); border-color: var(--success); color: var(--surface); }
+.order-steps li[data-state="current"] .dot { border-color: var(--brand); color: var(--brand); box-shadow: 0 0 0 4px var(--brand-tint); }
+.order-steps .label { font-size: 12px; font-weight: 550; color: var(--ink-500); }
+.order-steps li[data-state="done"] .label,
+.order-steps li[data-state="current"] .label { color: var(--ink-900); }
+
+.order-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.track-panel { display: grid; gap: 0; border: 1px solid var(--line); border-radius: var(--r-lg); overflow: hidden; background: var(--surface); }
+.track-map { position: relative; height: 320px; }
+.track-loading {
+  position: absolute; inset: 0; z-index: 500; display: grid; place-content: center; grid-auto-flow: column; gap: 8px;
+  align-items: center; font-size: 13px; color: var(--ink-600); background: var(--glass);
+}
+.track-figs { margin: 0; display: grid; grid-template-columns: auto auto 1fr; gap: 18px; padding: 12px 16px; border-top: 1px solid var(--line); }
+.track-figs dt { font-size: 11.5px; font-weight: 600; color: var(--ink-500); }
+.track-figs dd { margin: 2px 0 0; font-size: 14px; font-weight: 600; color: var(--ink-900); display: flex; align-items: center; gap: 7px; }
+.track-live { width: 8px; height: 8px; border-radius: 50%; background: var(--ink-300); flex: 0 0 8px; }
+.track-live[data-on="true"] { background: var(--success); box-shadow: 0 0 0 3px var(--success-bg); }
+
+@media (max-width: 1100px) {
+  .order-facts { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .order-facts .wide { max-width: none; }
+}
+@media (max-width: 760px) {
+  .orders-search { width: 100%; }
+  .orders-tools { width: 100%; }
+  .order-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .order-facts .wide { grid-column: 1 / -1; }
+  .order-steps .label { font-size: 11px; }
+  .order-actions .btn { flex: 1 1 auto; justify-content: center; }
+  .track-map { height: 260px; }
+  .track-figs { grid-template-columns: 1fr 1fr; }
+  .track-figs .wide { grid-column: 1 / -1; }
+}

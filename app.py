@@ -5613,7 +5613,12 @@ def demand():
 
 @app.route("/track")
 def track_page():
-    return render_template("track.html")
+    # React "Orders" page. Plant operators have their own view of it.
+    if not session.get("user_id"):
+        return redirect(url_for("login"))
+    if str(session.get("role", "")).lower().strip() == "stp":
+        return redirect(url_for("stp_track"))
+    return serve_spa()
 
 @app.route("/api/stps")
 def api_stps():
@@ -6963,6 +6968,14 @@ def _rupees_in_words(amount):
     return text[0].upper() + text[1:] + " only"
 
 
+def order_invoice_total(order):
+    """Invoice total for an order list ("" if it can't be worked out)."""
+    try:
+        return build_invoice_context(order)["total_plain"]
+    except Exception:
+        return ""
+
+
 def build_invoice_context(order, distance_km=None):
     """Line items and totals for one order, rounded to paise."""
     try:
@@ -7343,7 +7356,9 @@ def stp_orders():
                     "created_at": row.get("created_at"),
                     "payment_status": row.get("payment_status", ""),
                     "delivery_lat": row.get("delivery_lat", ""),
-                    "delivery_lon": row.get("delivery_lon", "")
+                    "delivery_lon": row.get("delivery_lon", ""),
+                    "total": order_invoice_total(row),
+                    "tanker_operator_id": row.get("tanker_operator_id", ""),
                 })
 
     results.sort(key=lambda x: x.get("created_at") or "", reverse=True)
@@ -7381,7 +7396,12 @@ def my_orders():
                         "stp_name": row.get("stp_name"),
                         "quantity_kld": row.get("quantity_kld"),
                         "created_at": row.get("created_at"),
-                        "payment_status": row.get("payment_status", "")
+                        "payment_status": row.get("payment_status", ""),
+                        "stp_id": row.get("stp_id", ""),
+                        "quality": row.get("quality", ""),
+                        "water_type": row.get("water_type", ""),
+                        "total": order_invoice_total(row),
+                        "tanker_operator_id": row.get("tanker_operator_id", ""),
                     })
 
     results.sort(key=lambda x: x.get("created_at") or "", reverse=True)
@@ -7958,9 +7978,9 @@ def stp_track():
     role = str(session.get("role", "")).lower().strip()
 
     if role != "stp":
-        return jsonify({"error": "Unauthorized"}), 403
+        return redirect(url_for("track_page"))
 
-    return render_template("stp_track.html")
+    return serve_spa()
 
 
 @app.route("/tanker/order/<order_id>/pickup", methods=["POST"])
@@ -14401,11 +14421,8 @@ def stp_dashboard():
 @app.route("/track_stp")
 def track_stp():
 
-    # Only STP operators can access this page
-    if session.get("role") != "stp":
-        return redirect(url_for("login"))
-
-    return render_template("track_stp.html")
+    # Older address of the plant's order tracking page.
+    return redirect(url_for("stp_track"))
 
 
 @app.route("/tanker/reports")

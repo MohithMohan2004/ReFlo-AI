@@ -9,7 +9,7 @@ const proxied = [
   "/api", "/static", "/create_order", "/handle_request", "/handle_transfer_request",
   "/request-water", "/upload_ocems_report", "/accept_pickup", "/reject_pickup",
   "/accept_transfer_pickup", "/reject_transfer_pickup", "/complete_transfer",
-  "/tanker/order", "/tanker/respond_request", "/login", "/logout", "/signup",
+  "/tanker/order", "/tanker/respond_request", "/reorder", "/login", "/logout", "/signup",
   "/invoice", "/track", "/stp_track", "/track_stp", "/trip_history", "/tanker/reports",
   "/tanker/register", "/tanker/status", "/stp/register", "/profile", "/admin", "/supply_ocems",
 ];

@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    {% include "_theme.html" %}
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Create account | ReFlow</title>
@@ -67,7 +68,7 @@
         <section class="login-panel signup-card" aria-labelledby="signup-title">
 
             <h2 id="signup-title">Create your account</h2>
-            <p class="subtitle">It takes about a minute. Already registered? <a href="{{ url_for('login') }}" style="color:#1463d6;font-weight:600;text-decoration:none;">Sign in</a></p>
+            <p class="subtitle">It takes about a minute. Already registered? <a href="{{ url_for('login') }}" style="color:var(--brand);font-weight:600;text-decoration:none;">Sign in</a></p>
 
             {% if signup_error %}
                 <div class="message error" role="alert">{{ signup_error }}</div>
@@ -210,7 +211,7 @@
                                 <svg class="lead" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h16"/><path d="M4 15h16"/><path d="M10 3 8 21"/><path d="M16 3l-2 18"/></svg>
                                 <input id="tanker_id" type="text" name="tanker_id" placeholder="e.g. OP-BLR-0003" autocomplete="off" value="{{ form.get('tanker_id', '') }}">
                             </div>
-                            <div class="hint" data-for="tanker_id">The ID you received after <a href="{{ url_for('tanker_register') }}" style="color:#1463d6;font-weight:600;">registering as a tanker partner</a>.</div>
+                            <div class="hint" data-for="tanker_id">The ID you received after <a href="{{ url_for('tanker_register') }}" style="color:var(--brand);font-weight:600;">registering as a tanker partner</a>.</div>
                         </div>
                     </div>
                 </fieldset>

@@ -40,7 +40,7 @@ export const roleNav: Record<string, NavSection[]> = {
       label: "Water",
       items: [
         { label: "Find water", short: "Water", href: "/demand", icon: Droplets, spa: true },
-        { label: "My orders", short: "Orders", href: "/track", icon: ClipboardList },
+        { label: "My orders", short: "Orders", href: "/track", icon: ClipboardList, spa: true },
       ],
     },
     { label: "Account", items: [{ label: "Profile", href: "/profile", icon: UserRound, spa: true }] },
@@ -50,7 +50,7 @@ export const roleNav: Record<string, NavSection[]> = {
       label: "Plant",
       items: [
         { label: "Overview", short: "Plant", href: "/supply", icon: LayoutGrid, spa: true },
-        { label: "Order tracking", short: "Orders", href: "/stp_track", icon: MapPinned },
+        { label: "Order tracking", short: "Orders", href: "/stp_track", icon: MapPinned, spa: true },
         { label: "OCEMS readings", short: "Quality", href: "/supply_ocems", icon: Gauge },
       ],
     },

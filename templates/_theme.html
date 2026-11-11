@@ -1,0 +1,9 @@
+{# Light / dark theme: same preference as the React app ("reflow-theme" in localStorage, else the OS setting). #}
+<script>
+  (function () {
+    var p = null;
+    try { p = localStorage.getItem("reflow-theme"); } catch (e) {}
+    var dark = p === "dark" || (p !== "light" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+    document.documentElement.dataset.theme = dark ? "dark" : "light";
+  })();
+</script>
