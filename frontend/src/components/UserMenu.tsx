@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { ChevronDown, LayoutGrid, LogOut, Mail, UserRound } from "lucide-react";
 import { useSession } from "../lib/session";
+import { ThemeSwitch } from "../lib/theme";
 
 export const ROLE_META: Record<string, { label: string; home: string; tone: string }> = {
   demand: { label: "Demand site", home: "/demand", tone: "sky" },
@@ -70,6 +71,11 @@ export function UserMenu() {
           <Link to="/profile" role="menuitem" onClick={() => setOpen(false)}>
             <UserRound size={15} /> Profile &amp; account
           </Link>
+          <div className="menu-sep" />
+          <div className="menu-theme">
+            <span>Theme</span>
+            <ThemeSwitch />
+          </div>
           <div className="menu-sep" />
           <a href="/logout" role="menuitem" className="danger">
             <LogOut size={15} /> Sign out

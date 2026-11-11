@@ -65,7 +65,7 @@
 .vcard-side {
   position: relative; display: grid; gap: 12px; align-content: start; padding: 18px 20px;
   border-right: 1px solid var(--line);
-  background: linear-gradient(180deg, #f3f7fd, var(--surface) 70%);
+  background: linear-gradient(180deg, var(--tint-brand), var(--surface) 70%);
 }
 .vcard-n { position: absolute; top: 14px; right: 16px; font-size: 12px; font-weight: 700; color: var(--ink-300); }
 .vcard-side .tanker-art { width: 86%; justify-self: center; }
