@@ -6,23 +6,6 @@ ReFlow connects sewage treatment plants (STPs) in Bengaluru with the people who 
 
 Treated water is a valuable resource, yet most of it goes unused. Buyers rarely know which plant is nearby, whether its water meets quality standards, or how to get it delivered. Plants have spare capacity but no simple way to sell it. ReFlow brings both sides, and the delivery partners between them, onto one platform.
 
-## Screenshots
-
-<table>
-  <tr>
-    <td align="center"><img src="docs/screenshots/demand-find-water.png" width="220" alt="Demand site: find treated water on the map"><br><sub>Buyer: find water</sub></td>
-    <td align="center"><img src="docs/screenshots/demand-match.png" width="220" alt="Nearest matching plant with the road route, distance and travel time"><br><sub>Buyer: matched plant and route</sub></td>
-    <td align="center"><img src="docs/screenshots/plant-dashboard.png" width="220" alt="Plant operator dashboard with orders and forecast"><br><sub>Plant dashboard</sub></td>
-  </tr>
-  <tr>
-    <td align="center"><img src="docs/screenshots/tanker-map.png" width="220" alt="Tanker partner map with Start trip"><br><sub>Tanker: start a trip</sub></td>
-    <td align="center"><img src="docs/screenshots/tanker-jobs.png" width="220" alt="Tanker job list in the bottom sheet"><br><sub>Tanker: jobs</sub></td>
-    <td align="center"><img src="docs/screenshots/tanker-trip-history.png" width="220" alt="Tanker trip history with delivery chart"><br><sub>Tanker: trip history</sub></td>
-  </tr>
-</table>
-
-<sub>Screenshots from the Android app.</sub>
-
 ## Who it's for
 
 | Role | Who they are | What ReFlow gives them |
@@ -44,24 +27,95 @@ Plants can also request water from each other, using the same tanker assignment 
 
 ## Features
 
+<sub>Screenshots are from the Android app, with demo account details.</sub>
+
 ### For demand sites
-- Search by address, current location or map pin, with a minimum order of 5 KLD.
-- A match card shows the best plant, alternative routes, distance, ETA and OCEMS quality readings.
+
+<table>
+<tr>
+<td width="50%" align="center"><img src="docs/screenshots/demand-find-water.png" width="260" alt="Map of nearby treatment plants with the delivery search form"></td>
+<td width="50%">
+
+#### Find treated water
+
+Every plant near you is on the map. Set where the water should go by searching an address, using your current location or dropping a pin. Then pick the quantity (5 KLD minimum), the quality grade and the water type.
+
+</td>
+</tr>
+<tr>
+<td width="50%">
+
+#### See your match
+
+ReFlow picks the nearest plant that can supply the order and draws the road route to your site. The match card shows the distance, the travel time and the plant's latest OCEMS quality readings. Alternative routes are shown when there are any.
+
+</td>
+<td width="50%" align="center"><img src="docs/screenshots/demand-match.png" width="260" alt="Matched plant with the road route, distance and travel time"></td>
+</tr>
+</table>
+
+**Also:**
 - Order list with All / Active / Pending / Completed filters, live tracking and shareable tracking links.
 - Tax invoices with an order timeline, print/PDF export, and pay-now or cash on delivery.
 
 ### For plant operators
-- A map of the plant's orders. Opening an order draws its delivery route.
-- Daily capacity, pending requests, deliveries in progress and a 7-day demand forecast.
+
+<table>
+<tr>
+<td width="50%" align="center"><img src="docs/screenshots/plant-dashboard.png" width="260" alt="Plant operator dashboard with a map of orders and daily stats"></td>
+<td width="50%">
+
+#### Run the plant from one screen
+
+The map shows the plant and the orders it serves. Opening an order draws its delivery route. The sheet below shows the water available today, pending requests, deliveries in progress and tomorrow's demand forecast, followed by the order list and plant-to-plant transfer requests.
+
+</td>
+</tr>
+</table>
+
+**Also:**
+- A 7-day demand forecast.
 - Pricing control: base rate, peak-hour surcharge and off-peak discount.
 - Quality reporting through OCEMS (online effluent monitoring) uploads, checked against CPCB limits.
 - Plant-to-plant water transfers.
 
 ### For tanker partners
-- A live job board: offers with expiry countdowns, refreshed automatically.
+
+<table>
+<tr>
+<td width="50%" align="center"><img src="docs/screenshots/tanker-map.png" width="260" alt="Tanker partner map with the Start trip button"></td>
+<td width="50%">
+
+#### Start a trip
+
+The tanker's position and nearby plants are on the map. **Start trip** turns on live location sharing, so the buyer can follow the delivery, and opens Google Maps with directions to the pickup plant and then the drop-off.
+
+</td>
+</tr>
+<tr>
+<td width="50%">
+
+#### Pick up jobs
+
+Drag the sheet up to see offers waiting, active jobs and completed deliveries. Each job shows the plant, the drop-off, the load, the quality grade and the haul distance. New offers arrive with a countdown and the list refreshes on its own.
+
+</td>
+<td width="50%" align="center"><img src="docs/screenshots/tanker-jobs.png" width="260" alt="Job list in the draggable bottom sheet"></td>
+</tr>
+<tr>
+<td width="50%" align="center"><img src="docs/screenshots/tanker-trip-history.png" width="260" alt="Trip history with totals, a delivery chart and a route map"></td>
+<td width="50%">
+
+#### Look back at every trip
+
+Totals for trips, water delivered and distance hauled, a 30-day chart of deliveries and a map of past routes.
+
+</td>
+</tr>
+</table>
+
+**Also:**
 - A **Current job** card showing where to go next, the load, distance and drive time, and a one-tap call to the buyer.
-- **Google Maps navigation** to the pickup plant and then the drop-off, with live location sharing for the buyer.
-- Trip history with delivered-volume charts and a map of past routes.
 - Fleet and compliance documents (RC, insurance, PUC, permit) for each vehicle.
 - Step-by-step registration for independent and contracted operators, with a status lookup.
 
