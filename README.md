@@ -6,6 +6,23 @@ ReFlow connects sewage treatment plants (STPs) in Bengaluru with the people who 
 
 Treated water is a valuable resource, yet most of it goes unused. Buyers rarely know which plant is nearby, whether its water meets quality standards, or how to get it delivered. Plants have spare capacity but no simple way to sell it. ReFlow brings both sides, and the delivery partners between them, onto one platform.
 
+## Screenshots
+
+<table>
+  <tr>
+    <td align="center"><img src="docs/screenshots/demand-find-water.png" width="220" alt="Demand site: find treated water on the map"><br><sub>Buyer: find water</sub></td>
+    <td align="center"><img src="docs/screenshots/demand-match.png" width="220" alt="Nearest matching plant with the road route, distance and travel time"><br><sub>Buyer: matched plant and route</sub></td>
+    <td align="center"><img src="docs/screenshots/plant-dashboard.png" width="220" alt="Plant operator dashboard with orders and forecast"><br><sub>Plant dashboard</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/screenshots/tanker-map.png" width="220" alt="Tanker partner map with Start trip"><br><sub>Tanker: start a trip</sub></td>
+    <td align="center"><img src="docs/screenshots/tanker-jobs.png" width="220" alt="Tanker job list in the bottom sheet"><br><sub>Tanker: jobs</sub></td>
+    <td align="center"><img src="docs/screenshots/tanker-trip-history.png" width="220" alt="Tanker trip history with delivery chart"><br><sub>Tanker: trip history</sub></td>
+  </tr>
+</table>
+
+<sub>Screenshots from the Android app.</sub>
+
 ## Who it's for
 
 | Role | Who they are | What ReFlow gives them |
