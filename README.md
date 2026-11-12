@@ -27,13 +27,13 @@ Plants can also request water from each other, using the same tanker assignment 
 
 ## Features
 
-<sub>Screenshots are from the Android app, with demo account details.</sub>
+<sub>Screenshots are from the Android app, with demo account details. They follow your GitHub theme: switch GitHub to dark mode to see ReFlow's dark theme.</sub>
 
 ### For demand sites
 
 <table>
 <tr>
-<td width="50%" align="center"><img src="docs/screenshots/demand-find-water.png" width="260" alt="Map of nearby treatment plants with the delivery search form"></td>
+<td width="50%" align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/demand-find-water-dark.png"><img src="docs/screenshots/demand-find-water.png" width="260" alt="Map of nearby treatment plants with the delivery search form"></picture></td>
 <td width="50%">
 
 #### Find treated water
@@ -50,7 +50,7 @@ Every plant near you is on the map. Set where the water should go by searching a
 ReFlow picks the nearest plant that can supply the order and draws the road route to your site. The match card shows the distance, the travel time and the plant's latest OCEMS quality readings. Alternative routes are shown when there are any.
 
 </td>
-<td width="50%" align="center"><img src="docs/screenshots/demand-match.png" width="260" alt="Matched plant with the road route, distance and travel time"></td>
+<td width="50%" align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/demand-match-dark.png"><img src="docs/screenshots/demand-match.png" width="260" alt="Matched plant with the road route, distance and travel time"></picture></td>
 </tr>
 </table>
 
@@ -62,7 +62,7 @@ ReFlow picks the nearest plant that can supply the order and draws the road rout
 
 <table>
 <tr>
-<td width="50%" align="center"><img src="docs/screenshots/plant-dashboard.png" width="260" alt="Plant operator dashboard with a map of orders and daily stats"></td>
+<td width="50%" align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/plant-dashboard-dark.png"><img src="docs/screenshots/plant-dashboard.png" width="260" alt="Plant operator dashboard with a map of orders and daily stats"></picture></td>
 <td width="50%">
 
 #### Run the plant from one screen
@@ -83,7 +83,7 @@ The map shows the plant and the orders it serves. Opening an order draws its del
 
 <table>
 <tr>
-<td width="50%" align="center"><img src="docs/screenshots/tanker-map.png" width="260" alt="Tanker partner map with the Start trip button"></td>
+<td width="50%" align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/tanker-map-dark.png"><img src="docs/screenshots/tanker-map.png" width="260" alt="Tanker partner map with the Start trip button"></picture></td>
 <td width="50%">
 
 #### Start a trip
@@ -100,10 +100,10 @@ The tanker's position and nearby plants are on the map. **Start trip** turns on 
 Drag the sheet up to see offers waiting, active jobs and completed deliveries. Each job shows the plant, the drop-off, the load, the quality grade and the haul distance. New offers arrive with a countdown and the list refreshes on its own.
 
 </td>
-<td width="50%" align="center"><img src="docs/screenshots/tanker-jobs.png" width="260" alt="Job list in the draggable bottom sheet"></td>
+<td width="50%" align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/tanker-jobs-dark.png"><img src="docs/screenshots/tanker-jobs.png" width="260" alt="Job list in the draggable bottom sheet"></picture></td>
 </tr>
 <tr>
-<td width="50%" align="center"><img src="docs/screenshots/tanker-trip-history.png" width="260" alt="Trip history with totals, a delivery chart and a route map"></td>
+<td width="50%" align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/tanker-trip-history-dark.png"><img src="docs/screenshots/tanker-trip-history.png" width="260" alt="Trip history with totals, a delivery chart and a route map"></picture></td>
 <td width="50%">
 
 #### Look back at every trip
@@ -127,6 +127,7 @@ Totals for trips, water delivered and distance hauled, a 30-day chart of deliver
 ### Across the platform
 - **Juno**, a chat assistant that finds plants and answers questions in plain language.
 - **Demand forecasting** with a trained XGBoost model for each plant.
+- **Light and dark themes**: follows the device setting, or choose Light or Dark from the profile page or account menu.
 - **Android app** with native GPS, an app-style phone layout, a bottom tab bar, a full-screen map and a draggable bottom sheet.
 
 ## Android app

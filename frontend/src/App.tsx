@@ -11,6 +11,7 @@ const Tanker = lazy(() => import("./pages/Tanker"));
 const Profile = lazy(() => import("./pages/Profile"));
 const FleetReports = lazy(() => import("./pages/FleetReports"));
 const TripHistory = lazy(() => import("./pages/TripHistory"));
+const Orders = lazy(() => import("./pages/Orders"));
 const StpRegister = lazy(() => import("./pages/register/StpRegister"));
 const TankerChoice = lazy(() => import("./pages/register/TankerChoice"));
 const TankerForm = lazy(() => import("./pages/register/TankerForm"));
@@ -40,6 +41,8 @@ export default function App() {
               <Route path="/profile" element={<Profile />} />
               <Route path="/tanker/reports" element={<FleetReports />} />
               <Route path="/trip_history" element={<TripHistory />} />
+              <Route path="/track" element={<Orders key="buyer" />} />
+              <Route path="/stp_track" element={<Orders key="plant" />} />
               <Route path="/stp/register" element={<StpRegister />} />
               <Route path="/tanker/register" element={<TankerChoice />} />
               <Route path="/tanker/register/independent" element={<TankerForm key="independent" variant="independent" />} />

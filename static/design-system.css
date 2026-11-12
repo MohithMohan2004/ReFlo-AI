@@ -82,7 +82,55 @@
   --t-press: 90ms;
   --t-fast: 140ms;
   --t-base: 220ms;
+
+  /* Surfaces and accents shared with the React app (frontend/src/styles/tokens.css) */
+  --glass: rgba(255, 255, 255, 0.9);
+  --glass-line: rgba(15, 27, 45, 0.08);
+  --float-ink: #0f1b2d;
+  --brand-tint: #eef4ff;
+  --info: #1463d6; --info-bg: #eef4fd; --info-line: #c9dcf7;
+  --teal: #0d9488; --violet: #7c3aed; --amber: #b45309; --sky: #0e7fb8;
+  --teal-tint: #e6f7f5; --violet-tint: #f1ebff; --amber-tint: #fff4e0; --sky-tint: #e8f6fd;
+
+  /* Short names used by the server-rendered pages */
+  --ink: var(--ink-900); --ink-2: var(--ink-700); --muted: var(--ink-500); --faint: var(--ink-400);
+  --line-2: var(--line-strong); --side: var(--side-bg);
+  --ok: var(--success); --ok-bg: var(--success-bg); --ok-line: var(--success-line);
+  --warn: var(--warning); --warn-bg: var(--warning-bg); --warn-line: var(--warning-line);
+  --bad: var(--danger); --bad-bg: var(--danger-bg); --bad-line: var(--danger-line);
+  color-scheme: light;
 }
+
+/* Dark theme. Same values as the React app; html[data-theme] is set by templates/_theme.html. */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --ink-900: #e8edf5; --ink-800: #d4dce8; --ink-700: #b6c2d2; --ink-600: #9eabbd;
+  --ink-500: #8594a8; --ink-400: #66778d; --ink-300: #46566c;
+  --line: #1f2b3d; --line-strong: #2a3850;
+  --bg: #080e19; --surface: #0f1726; --surface-2: #131d2e; --surface-3: #18243a;
+  --glass: rgba(15, 23, 38, 0.88); --glass-line: rgba(255, 255, 255, 0.08); --float-ink: #24324a;
+  --brand: #3b86f5; --brand-hover: #5597f7; --brand-press: #2a74e0;
+  --brand-tint: rgba(59, 134, 245, 0.16); --brand-ring: rgba(59, 134, 245, 0.38);
+  --success: #3fcf7f; --success-bg: rgba(63, 207, 127, 0.12); --success-line: rgba(63, 207, 127, 0.3);
+  --warning: #f5b544; --warning-bg: rgba(245, 181, 68, 0.12); --warning-line: rgba(245, 181, 68, 0.3);
+  --danger: #f57373; --danger-bg: rgba(245, 115, 115, 0.12); --danger-line: rgba(245, 115, 115, 0.32);
+  --info: #6aa5fa; --info-bg: rgba(59, 134, 245, 0.13); --info-line: rgba(59, 134, 245, 0.32);
+  --teal: #19b3a3; --violet: #8f63f2; --amber: #e9930f; --sky: #1f9ad9;
+  --teal-tint: rgba(25, 179, 163, 0.16); --violet-tint: rgba(143, 99, 242, 0.18);
+  --amber-tint: rgba(233, 147, 15, 0.16); --sky-tint: rgba(31, 154, 217, 0.16);
+  --side-bg: #060b14;
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-2: 0 1px 2px rgba(0, 0, 0, 0.3), 0 4px 12px -4px rgba(0, 0, 0, 0.4);
+  --shadow-3: 0 2px 4px rgba(0, 0, 0, 0.3), 0 12px 32px -8px rgba(0, 0, 0, 0.5);
+  --shadow-pop: 0 4px 8px rgba(0, 0, 0, 0.35), 0 24px 48px -12px rgba(0, 0, 0, 0.6);
+}
+:root[data-theme="dark"] .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(0.92) contrast(0.88) saturate(0.7); }
+:root[data-theme="dark"] .leaflet-container { background: #0d1522; }
+:root[data-theme="dark"] .leaflet-bar a { background: var(--surface-2); color: var(--ink-800); border-color: var(--line); }
+:root[data-theme="dark"] .leaflet-popup-content-wrapper, :root[data-theme="dark"] .leaflet-popup-tip { background: var(--surface-2); color: var(--ink-800); }
+:root[data-theme="dark"] .leaflet-control-attribution { background: var(--glass) !important; color: var(--ink-500); }
+:root[data-theme="dark"] .leaflet-control-attribution a { color: var(--ink-600); }
+:root[data-theme="dark"] ::selection { background: rgba(59, 134, 245, 0.35); }
 
 /* ----------------------------------------------------------
    2. BASE
@@ -187,7 +235,7 @@ a { color: var(--brand); text-underline-offset: 2px; }
   height: 34px !important;
   flex: 0 0 34px;
   border-radius: 9px !important;
-  background: #fff !important;
+  background: var(--surface) !important;
   box-shadow: none !important;
   overflow: hidden;
 }
@@ -328,10 +376,10 @@ a { color: var(--brand); text-underline-offset: 2px; }
    ---------------------------------------------------------- */
 .topbar,
 .mobile-navbar {
-  background: rgba(255, 255, 255, 0.78) !important;
+  background: var(--glass) !important;
   -webkit-backdrop-filter: saturate(180%) blur(18px);
   backdrop-filter: saturate(180%) blur(18px);
-  border-bottom: 1px solid rgba(15, 27, 45, 0.07) !important;
+  border-bottom: 1px solid var(--glass-line) !important;
   box-shadow: none !important;
 }
 .topbar { position: sticky; top: 0; z-index: 900; }
@@ -886,7 +934,7 @@ h4, h5 { letter-spacing: -0.005em; line-height: 1.35; }
 
 @media (prefers-reduced-transparency: reduce) {
   .topbar, .mobile-navbar {
-    background: #fff !important;
+    background: var(--surface) !important;
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
   }
@@ -904,7 +952,7 @@ h4, h5 { letter-spacing: -0.005em; line-height: 1.35; }
     --ink-400: #5f6e82;
     --side-text: #d5dde8;
   }
-  .topbar, .mobile-navbar { background: #fff !important; }
+  .topbar, .mobile-navbar { background: var(--surface) !important; }
 }
 
 /* ReFlow wordmark — Sora for the name only; the UI stays in the system/Inter stack */
@@ -940,19 +988,19 @@ h4, h5 { letter-spacing: -0.005em; line-height: 1.35; }
     display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr);
     height: calc(62px + env(safe-area-inset-bottom));
     padding: 6px 6px env(safe-area-inset-bottom);
-    background: rgba(255, 255, 255, 0.9);
+    background: var(--glass);
     -webkit-backdrop-filter: saturate(180%) blur(20px); backdrop-filter: saturate(180%) blur(20px);
-    border-top: 1px solid rgba(15, 27, 45, 0.08);
+    border-top: 1px solid var(--glass-line);
     font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", system-ui, sans-serif;
   }
   .app-tab {
     display: grid; justify-items: center; align-content: center; gap: 2px; min-width: 0;
-    color: #5f6e82; font-size: 11px; font-weight: 600; text-decoration: none;
+    color: var(--ink-500); font-size: 11px; font-weight: 600; text-decoration: none;
     -webkit-tap-highlight-color: transparent; touch-action: manipulation;
   }
   .app-tab svg { box-sizing: content-box; padding: 4px 16px; border-radius: 999px; transition: background 140ms ease-out, transform 220ms cubic-bezier(0.22, 1, 0.36, 1); }
   .app-tab:active svg { transform: scale(0.92); }
-  .app-tab.active { color: #1463d6; }
+  .app-tab.active { color: var(--brand); }
   .app-tab.active svg { background: rgba(20, 99, 214, 0.08); }
   .app-tab:hover { text-decoration: none; }
 }

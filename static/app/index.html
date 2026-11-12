@@ -10,8 +10,16 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Sora:wght@600;700&display=swap" rel="stylesheet" />
     <title>ReFlow</title>
-    <script type="module" crossorigin src="/static/app/assets/index-BeVvX1fS.js"></script>
-    <link rel="stylesheet" crossorigin href="/static/app/assets/index-SVPmbXIB.css">
+    <script>
+      (function () {
+        var p = null;
+        try { p = localStorage.getItem("reflow-theme"); } catch (e) {}
+        var dark = p === "dark" || (p !== "light" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+        document.documentElement.dataset.theme = dark ? "dark" : "light";
+      })();
+    </script>
+    <script type="module" crossorigin src="/static/app/assets/index-BeyNpap4.js"></script>
+    <link rel="stylesheet" crossorigin href="/static/app/assets/index-DiZmq3ZV.css">
   </head>
   <body>
     <div id="root"></div>

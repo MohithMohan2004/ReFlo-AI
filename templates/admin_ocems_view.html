@@ -1,20 +1,13 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    {% include "_theme.html" %}
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>OCEMS report {{ submission.stp_id }} | ReFlow admin</title>
     <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='brand-mark.svg') }}">
 
     <style>
-        :root {
-            --ink: #0f1b2d; --ink-2: #334155; --muted: #5f6e82; --faint: #8a97a8;
-            --line: #e4e9f0; --line-2: #d4dbe4; --bg: #f4f6f9; --surface: #fff; --surface-2: #f8fafc;
-            --brand: #1463d6;
-            --ok: #15803d; --ok-bg: #ecfdf3; --ok-line: #bbe8cb;
-            --warn: #b45309; --warn-bg: #fff8eb; --warn-line: #f6dcae;
-            --bad: #c42b2b; --bad-bg: #fef3f2; --bad-line: #f6caca;
-        }
         * { box-sizing: border-box; }
         body { margin: 0; background: var(--bg); color: var(--ink); -webkit-font-smoothing: antialiased; }
         svg.i { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; flex: none; }
@@ -24,7 +17,7 @@
             position: sticky; top: 0; z-index: 20;
             display: flex; align-items: center; justify-content: space-between; gap: 12px;
             padding: 12px 28px;
-            background: rgba(255, 255, 255, 0.8);
+            background: var(--glass);
             -webkit-backdrop-filter: blur(16px) saturate(180%); backdrop-filter: blur(16px) saturate(180%);
             border-bottom: 1px solid var(--line);
         }
@@ -33,7 +26,7 @@
         .bar .brand .wordmark { font-size: 20px; }
         .btn {
             display: inline-flex; align-items: center; justify-content: center; gap: 7px; height: 38px; padding: 0 14px;
-            border-radius: 10px; border: 1px solid var(--line); background: #fff; color: var(--ink-2);
+            border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--ink-2);
             font: inherit; font-size: 13px; font-weight: 600; text-decoration: none; cursor: pointer; white-space: nowrap;
             transition: background .14s, border-color .14s, transform .1s;
         }
@@ -53,14 +46,14 @@
         .card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
         .card-head p { margin: 3px 0 0; font-size: 13px; color: var(--muted); }
 
-        .meta { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; background: #fff; }
+        .meta { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; background: var(--surface); }
         .meta > div { display: flex; gap: 12px; align-items: center; padding: 14px 16px; border-right: 1px solid var(--line); min-width: 0; }
         .meta > div:last-child { border-right: 0; }
         .meta .ico { width: 36px; height: 36px; border-radius: 11px; display: grid; place-items: center; flex: none; }
-        .ico.teal { background: #e6f7f5; color: #0d9488; }
-        .ico.green { background: #e9f7ee; color: #15803d; }
-        .ico.sky { background: #e8f6fd; color: #0e7fb8; }
-        .ico.violet { background: #f1ebff; color: #7c3aed; }
+        .ico.teal { background: var(--teal-tint); color: #0d9488; }
+        .ico.green { background: #e9f7ee; color: var(--success); }
+        .ico.sky { background: var(--sky-tint); color: #0e7fb8; }
+        .ico.violet { background: var(--violet-tint); color: #7c3aed; }
         .label { font-size: 11px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--faint); }
         .meta .value { margin-top: 3px; font-size: 14px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
@@ -71,19 +64,19 @@
         .pill.bad { background: var(--bad-bg); color: var(--bad); border-color: var(--bad-line); }
 
         /* Spreadsheet preview (pandas to_html output) */
-        .sheet { overflow: auto; max-height: 560px; border: 1px solid var(--line); border-radius: 12px; background: #fff; }
+        .sheet { overflow: auto; max-height: 560px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
         .ocems-preview-table { width: 100%; border: 0; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
-        .ocems-preview-table td { border: 0; padding: 8px 12px; border-bottom: 1px solid var(--line); border-right: 1px solid #eef1f5; white-space: nowrap; color: var(--ink-2); background: #fff; }
+        .ocems-preview-table td { border: 0; padding: 8px 12px; border-bottom: 1px solid var(--line); border-right: 1px solid var(--line); white-space: nowrap; color: var(--ink-2); background: var(--surface); }
         .ocems-preview-table td:last-child { border-right: 0; }
-        .ocems-preview-table tr:hover td { background: #fbfcfe; }
+        .ocems-preview-table tr:hover td { background: var(--surface-2); }
         /* The first four rows are the sheet's header block: company, station, parameters, limits */
         .ocems-preview-table tr:nth-child(-n+4) td { background: var(--surface-2); color: var(--ink); font-weight: 600; }
-        .ocems-preview-table tr:nth-child(3) td { position: sticky; top: 0; z-index: 1; background: #eef4ff; color: #12408c; }
+        .ocems-preview-table tr:nth-child(3) td { position: sticky; top: 0; z-index: 1; background: var(--brand-tint); color: #12408c; }
         .ocems-preview-table tr:nth-child(4) td { border-bottom: 2px solid var(--line-2); }
 
         .review { display: grid; gap: 12px; }
         .review label { font-size: 13px; font-weight: 600; color: var(--ink-2); }
-        .review textarea { width: 100%; min-height: 96px; padding: 12px; border-radius: 12px; border: 1px solid var(--line-2); background: #fff; color: var(--ink); font: inherit; font-size: 14px; line-height: 1.5; resize: vertical; }
+        .review textarea { width: 100%; min-height: 96px; padding: 12px; border-radius: 12px; border: 1px solid var(--line-2); background: var(--surface); color: var(--ink); font: inherit; font-size: 14px; line-height: 1.5; resize: vertical; }
         .review textarea:focus { outline: none; border-color: var(--brand); box-shadow: 0 0 0 3px rgba(20, 99, 214, .2); }
         .review textarea[aria-invalid="true"] { border-color: var(--bad); box-shadow: 0 0 0 3px rgba(196, 43, 43, .15); }
         .hint { font-size: 12.5px; color: var(--muted); }
@@ -91,7 +84,7 @@
         .review .actions { display: flex; gap: 10px; flex-wrap: wrap; }
 
         .decided { display: flex; gap: 12px; align-items: flex-start; padding: 14px 16px; border-radius: 13px; font-size: 14px; line-height: 1.5; }
-        .decided.ok { background: var(--ok-bg); border: 1px solid var(--ok-line); color: #136c33; }
+        .decided.ok { background: var(--ok-bg); border: 1px solid var(--ok-line); color: var(--success); }
         .decided.bad { background: var(--bad-bg); border: 1px solid var(--bad-line); color: #8f1f1f; }
         .decided svg.i { width: 18px; height: 18px; margin-top: 2px; }
         .decided q { display: block; margin-top: 4px; color: var(--ink-2); font-style: italic; }

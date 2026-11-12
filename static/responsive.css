@@ -39,7 +39,7 @@ button,input,select,textarea { max-width:100%; }
         gap:10px !important;
         padding:8px 12px !important;
         margin:0 !important;
-        background:#ffffff !important;
+        background:var(--surface) !important;
         border-bottom:1px solid #e7edf5 !important;
         z-index:10005 !important;
         overflow:hidden !important;
@@ -122,7 +122,7 @@ button,input,select,textarea { max-width:100%; }
         border:0 !important;
         border-radius:9px !important;
         background:transparent !important;
-        color:#172033 !important;
+        color:var(--ink-900) !important;
         cursor:pointer !important;
         z-index:10006 !important;
         touch-action:manipulation !important;
@@ -398,7 +398,7 @@ button,input,select,textarea { max-width:100%; }
         display:block !important;
         visibility:visible !important;
         opacity:1 !important;
-        color:#172033 !important;
+        color:var(--ink-900) !important;
         white-space:nowrap !important;
         overflow:hidden !important;
         text-overflow:ellipsis !important;

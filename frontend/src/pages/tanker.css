@@ -47,9 +47,9 @@
   display: grid;
   gap: 12px;
   border-color: var(--info-line);
-  background: linear-gradient(180deg, #f3f8ff 0%, var(--surface) 70%);
+  background: linear-gradient(180deg, var(--tint-brand) 0%, var(--surface) 70%);
 }
-.current-job[data-stage="deliver"] { border-color: var(--success-line); background: linear-gradient(180deg, #f1fbf5 0%, var(--surface) 70%); }
+.current-job[data-stage="deliver"] { border-color: var(--success-line); background: linear-gradient(180deg, var(--tint-success) 0%, var(--surface) 70%); }
 .current-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .current-step { font-size: 11.5px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--brand); }
 .current-job[data-stage="deliver"] .current-step { color: var(--success); }

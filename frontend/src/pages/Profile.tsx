@@ -15,6 +15,7 @@ import { useToast } from "../lib/toast";
 import { useAsync } from "../lib/useAsync";
 import { initials, num, when } from "../lib/format";
 import type { Stp } from "../lib/types";
+import { ThemeSwitch } from "../lib/theme";
 import "./profile.css";
 
 interface ProfileData {
@@ -74,6 +75,13 @@ export default function Profile() {
         ) : role === "tanker" ? (
           <OperatorCard op={p.data?.operator ?? null} />
         ) : null}
+
+        <section className="card">
+          <header className="card-head">
+            <div><h2>Appearance</h2><p>Choose how ReFlow looks on this device</p></div>
+          </header>
+          <div style={{ padding: "14px 20px 18px" }}><ThemeSwitch /></div>
+        </section>
 
         <p className="profile-note">
           <ShieldCheck size={14} /> Your email is your sign-in and can't be changed here. Edits to your name apply to new
