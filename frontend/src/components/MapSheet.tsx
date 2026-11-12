@@ -46,7 +46,9 @@ function Sheet({ peek, label, children }: { peek: number; label: string; childre
   const y = useRef(0);
   const height = useRef(0);
   const drag = useRef<{ id: number; startY: number; startOffset: number; moved: boolean; hist: { t: number; y: number }[] } | null>(null);
-  const suppressClick = useRef(false);
+  // A drag ending over a button must not press it, but a touch drag usually fires no
+  // click at all, so only swallow a click that arrives right after the drag ends.
+  const suppressClickUntil = useRef(0);
 
   const offsets = useCallback((): Record<SheetSnap, number> => {
     const H = height.current;
@@ -99,6 +101,7 @@ function Sheet({ peek, label, children }: { peek: number; label: string; childre
   /* ---------- Gesture: track 1:1, hand off velocity, project, snap ---------- */
   function onPointerDown(e: React.PointerEvent) {
     if (e.pointerType === "mouse" && e.button !== 0) return;
+    suppressClickUntil.current = 0; // a new touch is never the tail of the last drag
     const fromHandle = (e.target as HTMLElement).closest(".sheet-grab");
     // Fully open: the content scrolls; only the handle moves the sheet.
     if (snapRef.current === "full" && !fromHandle) return;
@@ -127,7 +130,7 @@ function Sheet({ peek, label, children }: { peek: number; label: string; childre
     const d = drag.current;
     drag.current = null;
     if (!d || d.id !== e.pointerId || !d.moved) return;
-    suppressClick.current = true;
+    suppressClickUntil.current = performance.now() + 400;
     const first = d.hist[0]!, last = d.hist[d.hist.length - 1]!;
     const dt = Math.max(1, last.t - first.t);
     const velocity = ((last.y - first.y) / dt) * 1000; // px/s, + is down
@@ -144,8 +147,8 @@ function Sheet({ peek, label, children }: { peek: number; label: string; childre
 
   // A drag that ends over a button must not also press it.
   function onClickCapture(e: React.MouseEvent) {
-    if (suppressClick.current) {
-      suppressClick.current = false;
+    if (performance.now() < suppressClickUntil.current) {
+      suppressClickUntil.current = 0;
       e.stopPropagation();
       e.preventDefault();
     }
