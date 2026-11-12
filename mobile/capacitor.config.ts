@@ -5,10 +5,10 @@ import { writeFileSync } from "node:fs";
 // Flask keeps the login in a session cookie, so the WebView loads pages
 // straight from the server instead of bundling them.
 //
-//   Android emulator -> http://10.0.2.2:10000 (the host machine's localhost)
-//   Physical phone   -> REFLOW_SERVER_URL=http://<your-LAN-IP>:10000 npm run sync
-//   Production       -> REFLOW_SERVER_URL=https://<deployed-host> npm run sync
-const serverUrl = process.env.REFLOW_SERVER_URL ?? "http://10.0.2.2:10000";
+//   Production (default) -> https://reflow-w9xu.onrender.com (Render)
+//   Android emulator     -> REFLOW_SERVER_URL=http://10.0.2.2:10000 npm run sync (host's localhost)
+//   Physical phone       -> REFLOW_SERVER_URL=http://<your-LAN-IP>:10000 npm run sync
+const serverUrl = process.env.REFLOW_SERVER_URL ?? "https://reflow-w9xu.onrender.com";
 
 // The offline page's "Try again" button needs the server address.
 writeFileSync("www/server.js", `window.REFLOW_SERVER_URL = ${JSON.stringify(serverUrl)};\n`);

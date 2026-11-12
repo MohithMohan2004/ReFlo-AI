@@ -25,9 +25,9 @@ The app loads the server set in `REFLOW_SERVER_URL` when it is built:
 
 | Target | Command |
 |---|---|
-| Android emulator, server on the same computer (default) | `npm run apk` (uses `http://10.0.2.2:10000`) |
+| Production on Render (default) | `npm run apk` (uses `https://reflow-w9xu.onrender.com`) |
+| Android emulator, server on the same computer | `REFLOW_SERVER_URL=http://10.0.2.2:10000 npm run apk` |
 | Phone on the same Wi-Fi network | `REFLOW_SERVER_URL=http://<computer-LAN-IP>:10000 npm run apk` |
-| Production | `REFLOW_SERVER_URL=https://<your-domain> npm run apk` |
 
 Install on a connected phone or emulator with `adb install -r android/app/build/outputs/apk/debug/app-debug.apk`.
 
