@@ -719,6 +719,204 @@ def get_operator_vehicle(
 
 
 # =========================================================
+# REMOVE A VEHICLE FROM AN OPERATOR'S FLEET
+# =========================================================
+
+fleet_lock = threading.Lock()
+
+ORDER_TERMINAL_STATUSES = {
+    "delivered", "completed", "cancelled", "canceled", "rejected"
+}
+
+
+def remove_tanker_vehicle(operator_id, vehicle_id):
+    """Delete one vehicle (and its documents) from an operator's fleet.
+
+    Refuses to remove the operator's last vehicle or a vehicle assigned
+    to an order that isn't finished. Keeps the registration's
+    operational_tankers count and its mirrored first-vehicle fields in
+    sync with the remaining vehicles.
+
+    Returns (removed_vehicle, None) or (None, error_message).
+    """
+
+    operator_id = str(operator_id or "").strip()
+    vehicle_id = str(vehicle_id or "").strip()
+
+    if not operator_id or not vehicle_id:
+        return None, "Vehicle not found."
+
+    with fleet_lock:
+
+        ensure_tanker_vehicles_file()
+
+        with store.open(
+            TANKER_VEHICLES_FILE, "r", newline="", encoding="utf-8"
+        ) as f:
+            vehicle_rows = list(csv.DictReader(f))
+
+        own_vehicles = [
+            row for row in vehicle_rows
+            if str(row.get("operator_id") or "").strip() == operator_id
+        ]
+
+        target = next(
+            (
+                row for row in own_vehicles
+                if str(row.get("vehicle_id") or "").strip() == vehicle_id
+            ),
+            None
+        )
+
+        if target is None:
+            return None, "Vehicle not found."
+
+        if len(own_vehicles) <= 1:
+            return None, (
+                "A fleet needs at least one vehicle. "
+                "Add another vehicle before removing this one."
+            )
+
+        # A vehicle on an unfinished order can't be removed.
+        if (
+            store.exists(ORDERS_FILE)
+            and store.getsize(ORDERS_FILE) > 0
+        ):
+            with store.open(
+                ORDERS_FILE, "r", newline="", encoding="utf-8"
+            ) as f:
+                for order in csv.DictReader(f):
+                    if (
+                        str(order.get("assigned_operator_id") or "").strip()
+                        != operator_id
+                    ):
+                        continue
+                    status = str(order.get("status") or "").strip().lower()
+                    if status in ORDER_TERMINAL_STATUSES:
+                        continue
+                    assigned = {
+                        part.strip()
+                        for part in str(
+                            order.get("assigned_vehicle_ids") or ""
+                        ).split(",")
+                    }
+                    if vehicle_id in assigned:
+                        return None, (
+                            "This vehicle is on an active order "
+                            f"({order.get('order_id') or 'unknown'}). "
+                            "Remove it after the delivery is complete."
+                        )
+
+        remaining = [
+            row for row in vehicle_rows if row is not target
+        ]
+
+        with store.open(
+            TANKER_VEHICLES_FILE, "w", newline="", encoding="utf-8"
+        ) as f:
+            writer = csv.DictWriter(
+                f, fieldnames=TANKER_VEHICLE_FIELDS, extrasaction="ignore"
+            )
+            writer.writeheader()
+            for row in remaining:
+                writer.writerow({
+                    field: row.get(field, "")
+                    for field in TANKER_VEHICLE_FIELDS
+                })
+
+        # Drop the vehicle's documents and their uploaded files.
+        ensure_tanker_vehicle_documents_file()
+
+        with store.open(
+            TANKER_VEHICLE_DOCUMENTS_FILE, "r", newline="", encoding="utf-8"
+        ) as f:
+            document_rows = list(csv.DictReader(f))
+
+        kept_documents = []
+
+        for document in document_rows:
+            if (
+                str(document.get("operator_id") or "").strip() == operator_id
+                and str(document.get("vehicle_id") or "").strip() == vehicle_id
+            ):
+                stored = os.path.basename(
+                    str(document.get("stored_filename") or "")
+                )
+                if stored:
+                    try:
+                        os.remove(
+                            os.path.join(TANKER_DOCUMENT_UPLOAD_FOLDER, stored)
+                        )
+                    except OSError:
+                        pass
+                continue
+            kept_documents.append(document)
+
+        if len(kept_documents) != len(document_rows):
+            with store.open(
+                TANKER_VEHICLE_DOCUMENTS_FILE, "w", newline="",
+                encoding="utf-8"
+            ) as f:
+                writer = csv.DictWriter(
+                    f, fieldnames=TANKER_VEHICLE_DOCUMENT_FIELDS,
+                    extrasaction="ignore"
+                )
+                writer.writeheader()
+                for document in kept_documents:
+                    writer.writerow({
+                        field: document.get(field, "")
+                        for field in TANKER_VEHICLE_DOCUMENT_FIELDS
+                    })
+
+        # Keep the registration's fleet size and first-vehicle mirror
+        # in step with the vehicles that are left.
+        fleet_left = [
+            row for row in remaining
+            if str(row.get("operator_id") or "").strip() == operator_id
+        ]
+
+        ensure_tanker_registrations_schema()
+
+        with store.open(
+            TANKER_REGISTRATIONS_FILE, "r", newline="", encoding="utf-8"
+        ) as f:
+            registrations = list(csv.DictReader(f))
+
+        first = fleet_left[0]
+
+        for registration in registrations:
+            if str(registration.get("operator_id") or "").strip() != operator_id:
+                continue
+            registration["operational_tankers"] = str(len(fleet_left))
+            registration["tanker_registration_no"] = first.get(
+                "registration_number", ""
+            )
+            registration["tanker_capacity_kl"] = first.get("capacity_kl", "")
+            registration["vehicle_model"] = first.get("vehicle_model", "")
+
+        with store.open(
+            TANKER_REGISTRATIONS_FILE, "w", newline="", encoding="utf-8"
+        ) as f:
+            writer = csv.DictWriter(
+                f, fieldnames=TANKER_REGISTRATION_FIELDS, extrasaction="ignore"
+            )
+            writer.writeheader()
+            for registration in registrations:
+                writer.writerow({
+                    field: registration.get(field, "")
+                    for field in TANKER_REGISTRATION_FIELDS
+                })
+
+    print(
+        "VEHICLE REMOVED:", vehicle_id,
+        "OPERATOR:", operator_id,
+        "FLEET NOW:", len(fleet_left)
+    )
+
+    return target, None
+
+
+# =========================================================
 # TANKER REGISTRATION SCHEMA / FLEET ASSIGNMENT
 # =========================================================
 TANKER_REGISTRATION_FIELDS = [
@@ -5166,7 +5364,10 @@ def tanker_register_independent():
         # SAVE INDIVIDUAL VEHICLES
         # ==========================================
 
-        ensure_tanker_vehicles_file()
+        # The file was ensured before the operator was saved. Calling
+        # ensure_tanker_vehicles_file() again here would backfill a legacy
+        # vehicle for this operator (its vehicles aren't written yet) and
+        # duplicate the first vehicle.
 
 
         with store.open(
@@ -14010,6 +14211,58 @@ def timeout_worker():
         # Check frequently enough that a 10-minute
         # offer is moved on promptly after expiry.
         time.sleep(15)
+
+
+@app.route(
+    "/api/tanker/vehicles/<vehicle_id>/remove",
+    methods=["POST"]
+)
+@login_required(role="tanker")
+def api_tanker_remove_vehicle(vehicle_id):
+    """Let a tanker operator remove one of their own vehicles."""
+
+    operator_id = str(
+        session.get("tanker_operator_id") or ""
+    ).strip()
+
+    removed, error = remove_tanker_vehicle(operator_id, vehicle_id)
+
+    if error:
+        return jsonify({"success": False, "error": error}), 400
+
+    return jsonify({
+        "success": True,
+        "removed": removed.get("registration_number") or vehicle_id
+    })
+
+
+@app.route(
+    "/admin/tanker/operator/<operator_id>/vehicle/<vehicle_id>/remove",
+    methods=["POST"]
+)
+@login_required(role="admin")
+def admin_remove_tanker_vehicle(operator_id, vehicle_id):
+    """Let an admin remove a vehicle from any operator's fleet."""
+
+    removed, error = remove_tanker_vehicle(operator_id, vehicle_id)
+
+    if error:
+        notice = {"fleet_error": error}
+    else:
+        notice = {
+            "fleet_notice": (
+                f"Removed {removed.get('registration_number') or vehicle_id} "
+                "from the fleet."
+            )
+        }
+
+    return redirect(
+        url_for(
+            "admin_tanker_operator_details",
+            operator_id=operator_id,
+            **notice
+        )
+    )
 
 
 @app.route(

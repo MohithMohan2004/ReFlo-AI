@@ -375,6 +375,50 @@
 
 
         /* =========================
+           FLEET NOTICE / REMOVE VEHICLE
+        ========================= */
+
+        .fleet-notice {
+            margin: 0 0 16px;
+            padding: 11px 14px;
+            border-radius: 9px;
+            font-size: 11px;
+            border: 1px solid var(--success-line);
+            background: var(--success-bg);
+            color: var(--success);
+        }
+
+        .fleet-notice.error {
+            border-color: var(--danger-line);
+            background: var(--danger-bg);
+            color: var(--danger);
+        }
+
+        .remove-vehicle {
+            display: flex;
+            justify-content: flex-end;
+            margin-top: 14px;
+            padding-top: 14px;
+            border-top: 1px solid var(--line);
+        }
+
+        .remove-vehicle button {
+            border: 1px solid var(--danger);
+            background: transparent;
+            color: var(--danger);
+            border-radius: 7px;
+            padding: 8px 14px;
+            font: inherit;
+            font-size: 10px;
+            font-weight: 500;
+            cursor: pointer;
+        }
+
+        .remove-vehicle button:hover {
+            background: var(--danger-bg);
+        }
+
+        /* =========================
            EMPTY
         ========================= */
 
@@ -478,6 +522,12 @@
     </div>
 
 
+
+    {% if request.args.get("fleet_error") %}
+        <div class="fleet-notice error" role="alert">{{ request.args.get("fleet_error") }}</div>
+    {% elif request.args.get("fleet_notice") %}
+        <div class="fleet-notice" role="status">{{ request.args.get("fleet_notice") }}</div>
+    {% endif %}
 
     <!-- =========================
          DOCUMENT STATS
@@ -1012,6 +1062,16 @@
 
                         </div>
 
+
+                        <form
+                            class="remove-vehicle"
+                            method="POST"
+                            action="{{ url_for('admin_remove_tanker_vehicle', operator_id=operator.operator_id, vehicle_id=vehicle.vehicle_id) }}"
+                            data-confirm="Remove {{ vehicle.registration_number }} from this fleet? Its documents are deleted too."
+                            onsubmit="return confirm(this.dataset.confirm);"
+                        >
+                            <button type="submit">Remove vehicle</button>
+                        </form>
 
                     </div>
 

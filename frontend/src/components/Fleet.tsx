@@ -1,5 +1,9 @@
-import { ArrowRight, Gauge, Truck } from "lucide-react";
-import { Empty } from "./ui";
+import { useState } from "react";
+import { ArrowRight, Gauge, Trash2, Truck } from "lucide-react";
+import { Empty, Spinner } from "./ui";
+import { Dialog } from "./Dialog";
+import { postJSON } from "../lib/api";
+import { useToast } from "../lib/toast";
 import { num } from "../lib/format";
 
 export interface Vehicle { vehicle_id?: string; registration_number?: string; vehicle_model?: string; capacity_kl?: string; vehicle_status?: string }
@@ -64,7 +68,49 @@ function Donut({ part, total }: { part: number; total: number }) {
   );
 }
 
-export function FleetPanel({ vehicles, free, total, onJob }: { vehicles: Vehicle[]; free: number; total: number; onJob: number }) {
+/** Confirms and removes one vehicle; the server refuses the last vehicle or one on an active order. */
+function RemoveVehicleDialog({ vehicle, onClose, onRemoved }: { vehicle: Vehicle; onClose: () => void; onRemoved: () => void }) {
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const plate = vehicle.registration_number || vehicle.vehicle_id || "this vehicle";
+  const remove = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await postJSON(`/api/tanker/vehicles/${encodeURIComponent(vehicle.vehicle_id ?? "")}/remove`, {});
+      toast(`Removed ${plate} from your fleet.`, "success");
+      onRemoved();
+      onClose();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not remove the vehicle.");
+      setBusy(false);
+    }
+  };
+  return (
+    <Dialog title="Remove vehicle" onClose={onClose}>
+      <div className="stack">
+        <p>
+          Remove <strong className="num">{plate}</strong> ({vehicle.vehicle_model || "Water tanker"}, {num(Number(vehicle.capacity_kl) || 0)} KL) from your fleet?
+          Its uploaded documents are deleted too. This can't be undone.
+        </p>
+        {error && <p className="field-error" role="alert">{error}</p>}
+        <div className="dialog-actions">
+          <button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button>
+          <button type="button" className="btn btn-danger" onClick={remove} disabled={busy}>{busy ? <Spinner /> : <Trash2 />} Remove</button>
+        </div>
+      </div>
+    </Dialog>
+  );
+}
+
+export function FleetPanel({ vehicles, free, total, onJob, onRemoved }: {
+  vehicles: Vehicle[]; free: number; total: number; onJob: number;
+  /** When given, each vehicle gets a Remove action; called after a removal. */
+  onRemoved?: () => void;
+}) {
+  const [removing, setRemoving] = useState<Vehicle | null>(null);
+  const canRemove = !!onRemoved && vehicles.length > 1;
   const caps = vehicles.map((v) => Number(v.capacity_kl) || 0);
   const totalKl = caps.reduce((a, b) => a + b, 0);
   return (
@@ -98,6 +144,11 @@ export function FleetPanel({ vehicles, free, total, onJob }: { vehicles: Vehicle
                   <span className={active ? "v-on" : "v-off"}>{active ? "In service" : String(v.vehicle_status || "Inactive")}</span>
                 </div>
                 <div className="cap-bar" aria-hidden="true"><span style={{ width: `${Math.min(100, (cap / MAX_KL) * 100)}%` }} /></div>
+                {canRemove && v.vehicle_id && (
+                  <button type="button" className="btn btn-ghost btn-sm vehicle-remove" onClick={() => setRemoving(v)}>
+                    <Trash2 size={14} /> Remove
+                  </button>
+                )}
               </article>
             );
           })}
@@ -105,6 +156,7 @@ export function FleetPanel({ vehicles, free, total, onJob }: { vehicles: Vehicle
       ) : (
         <Empty icon={Truck} title="No vehicles yet" action={<a className="btn btn-sm btn-secondary" href="/tanker/reports">Add a vehicle</a>} />
       )}
+      {removing && onRemoved && <RemoveVehicleDialog vehicle={removing} onClose={() => setRemoving(null)} onRemoved={onRemoved} />}
     </section>
   );
 }

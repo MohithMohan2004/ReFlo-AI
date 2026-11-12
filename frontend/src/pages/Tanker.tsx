@@ -353,7 +353,7 @@ export default function Tanker() {
             )}
           </section>
 
-          <FleetPanel vehicles={ov.data?.vehicles ?? []} free={ov.data?.available_tankers ?? 0} total={ov.data?.operational_tankers ?? 0} onJob={ov.data?.active_tankers ?? 0} />
+          <FleetPanel vehicles={ov.data?.vehicles ?? []} free={ov.data?.available_tankers ?? 0} total={ov.data?.operational_tankers ?? 0} onJob={ov.data?.active_tankers ?? 0} onRemoved={ov.reload} />
         </div>
         </MapSheet>
       </main>
