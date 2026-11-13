@@ -1,17 +1,40 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+  <!-- ReFlow mark: an "Rf" ligature leaning forward. The bottom of the R's bowl runs on as the f's
+       crossbar, and the tile splits there: sky above, treated water below. -->
   <defs>
-    <linearGradient id="rf-bg" x1="4" y1="2" x2="44" y2="46" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#2f6bff"/>
-      <stop offset=".55" stop-color="#1463d6"/>
-      <stop offset="1" stop-color="#0d9488"/>
+    <linearGradient id="rf-sky" x1="0" y1="0" x2="0" y2="24" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#38bdf8"/>
+      <stop offset="1" stop-color="#0284c7"/>
     </linearGradient>
-    <linearGradient id="rf-fg" x1="0" y1="0" x2="48" y2="48" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#fff"/>
-      <stop offset="1" stop-color="#d7fbf5"/>
+    <linearGradient id="rf-water" x1="0" y1="24" x2="0" y2="48" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#2563eb"/>
+      <stop offset="1" stop-color="#1e3a8a"/>
     </linearGradient>
+    <linearGradient id="rf-sheen" x1="0" y1="0" x2="0" y2="48" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#fff" stop-opacity=".18"/>
+      <stop offset=".5" stop-color="#fff" stop-opacity="0"/>
+    </linearGradient>
+    <clipPath id="rf-tile"><rect width="48" height="48" rx="13"/></clipPath>
   </defs>
-  <rect width="48" height="48" rx="13" fill="url(#rf-bg)"/>
-  <path d="M31.5 15.5C29 12.2 26.6 9.6 24 7c-5.8 6-11 12.5-11 19.5a11 11 0 0 0 22 0" fill="none" stroke="url(#rf-fg)" stroke-width="3.4" stroke-linecap="round"/>
-  <path d="M29.5 26.5a5.5 5.5 0 1 1-5.5-5.5" fill="none" stroke="url(#rf-fg)" stroke-width="3.4" stroke-linecap="round"/>
-  <circle cx="35" cy="21" r="2.2" fill="#fff"/>
+  <g clip-path="url(#rf-tile)">
+    <rect width="48" height="24" fill="url(#rf-sky)"/>
+    <rect y="24" width="48" height="24" fill="url(#rf-water)"/>
+    <rect y="24" width="48" height="5" fill="#fff" opacity=".08"/>
+    <path d="M-2 31.5c4-1.6 8-1.6 12 0s8 1.6 12 0s8-1.6 12 0s8 1.6 12 0s8-1.6 12 0" fill="none" stroke="#fff" stroke-width="1" opacity=".22"/>
+    <path d="M38.4,38a1.6,1.6 0 1,0 3.2,0a1.6,1.6 0 1,0 -3.2,0zM35.5,42.5a1,1 0 1,0 2,0a1,1 0 1,0 -2,0zM7.8,41a1.2,1.2 0 1,0 2.4,0a1.2,1.2 0 1,0 -2.4,0z" fill="#fff" opacity=".28"/>
+    <rect width="48" height="48" fill="url(#rf-sheen)"/>
+  </g>
+  <rect x=".5" y=".5" width="47" height="47" rx="12.5" fill="none" stroke="#fff" stroke-opacity=".16"/>
+  <g fill="none" stroke-width="4.2" stroke-linecap="round" stroke-linejoin="round">
+    <g stroke="#0b1a4a" opacity=".22" transform="translate(0 .9)">
+    <path d="M10.6 36L14.32 12.5L20.32 12.5C23.5 12.5 25.66 15.07 25.16 18.25C24.66 21.43 21.68 24 18.5 24M18 24L21.6 36"/>
+    <path d="M28.6 36L31.37 18.5C31.9 15.19 35.01 12.5 38.32 12.5L38.82 12.5"/>
+    <path d="M12.5 24L36.5 24"/>
+    </g>
+    <g stroke="#fff">
+    <path d="M10.6 36L14.32 12.5L20.32 12.5C23.5 12.5 25.66 15.07 25.16 18.25C24.66 21.43 21.68 24 18.5 24M18 24L21.6 36"/>
+    <path d="M28.6 36L31.37 18.5C31.9 15.19 35.01 12.5 38.32 12.5L38.82 12.5"/>
+    <path d="M12.5 24L36.5 24"/>
+    </g>
+  </g>
 </svg>
