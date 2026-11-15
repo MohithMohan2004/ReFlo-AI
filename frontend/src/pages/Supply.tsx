@@ -31,10 +31,13 @@ interface DemandRow {
   payment_status?: string; assigned_operator_name?: string; delivery_lat?: string; delivery_lon?: string;
 }
 interface TransferRow {
-  transfer_id: string; source_stp_name: string; destination_stp_id?: string; destination_stp_name: string; quantity_kld: string;
-  quality: string; water_type: string; distance_km: string; status: string; requested_at: string; tanker_status?: string;
-  assigned_operator_name?: string;
+  transfer_id: string; source_stp_id?: string; source_stp_name: string; destination_stp_id?: string; destination_stp_name: string;
+  quantity_kld: string; quality: string; water_type: string; distance_km: string; status: string; requested_at: string;
+  tanker_status?: string; assigned_operator_name?: string;
+  /** "incoming": another plant asks this one for water. "outgoing": this plant asked another one. */
+  direction?: "incoming" | "outgoing";
 }
+const isOutgoing = (t: TransferRow) => t.direction === "outgoing";
 interface Pricing {
   base_price_per_kld: string | number; peak_incentive: string | number; off_peak_incentive: string | number;
   peak_start: string; peak_end: string; off_peak_start: string; off_peak_end: string;
@@ -74,14 +77,19 @@ export default function Supply() {
   );
   const transfers = ov.data?.transfer_requests ?? [];
   const visible = applyFilter(demands, filter, (d) => d.status);
-  const pendingCount = demands.filter((d) => d.status === "Pending").length + transfers.filter((t) => t.status === "Pending").length;
+  const pendingCount = demands.filter((d) => d.status === "Pending").length + transfers.filter((t) => !isOutgoing(t) && t.status === "Pending").length;
   const activeCount = demands.filter((d) => bucketOf(d.status) === "active").length;
   const deliveredCount = demands.filter((d) => d.status === "Delivered").length;
 
   const plantPt = stp ? toPoint(stp.latitude, stp.longitude) : null;
   const focusedOrder = focus?.kind === "order" ? demands.find((d) => d.request_id === focus.id) ?? null : null;
   const focusedTransfer = focus?.kind === "transfer" ? transfers.find((t) => t.transfer_id === focus.id) ?? null : null;
-  const destStp = focusedTransfer ? ov.data?.stps.find((s) => s.stp_id === focusedTransfer.destination_stp_id || s.stp_name === focusedTransfer.destination_stp_name) : null;
+  // The other end of the transfer: the destination for requests we received, the source for ones we made.
+  const destStp = focusedTransfer
+    ? isOutgoing(focusedTransfer)
+      ? ov.data?.stps.find((s) => s.stp_id === focusedTransfer.source_stp_id || s.stp_name === focusedTransfer.source_stp_name)
+      : ov.data?.stps.find((s) => s.stp_id === focusedTransfer.destination_stp_id || s.stp_name === focusedTransfer.destination_stp_name)
+    : null;
   const focusPt = focusedOrder ? toPoint(focusedOrder.delivery_lat, focusedOrder.delivery_lon) : destStp ? toPoint(destStp.latitude, destStp.longitude) : null;
   const { route, loading: routing } = useRoute(plantPt, focusPt);
 
@@ -144,7 +152,11 @@ export default function Supply() {
                     <button type="button" className="btn btn-ghost btn-sm btn-icon" onClick={() => setFocus(null)} aria-label="Close details"><X size={15} /></button>
                   </header>
                   <p className="panel-dest">
-                    {focusedOrder ? focusedOrder.site_name : `${focusedTransfer!.destination_stp_name} (plant transfer)`}
+                    {focusedOrder
+                      ? focusedOrder.site_name
+                      : isOutgoing(focusedTransfer!)
+                        ? `From ${focusedTransfer!.source_stp_name} (your request)`
+                        : `${focusedTransfer!.destination_stp_name} (plant transfer)`}
                   </p>
                   <dl className="panel-figs">
                     <div><dt><Navigation size={13} /> Route</dt><dd className="num">{route ? `${num(route.km, 1)} km` : routing ? "…" : focusPt ? "—" : "No location"}</dd></div>
@@ -162,7 +174,8 @@ export default function Supply() {
                       {focusedOrder.buyer_phone && <a href={`tel:${focusedOrder.buyer_phone}`}><Phone size={13} /> {focusedOrder.buyer_phone}</a>}
                     </div>
                   )}
-                  {(focusedOrder?.status ?? focusedTransfer?.status) === "Pending" && (
+                  {focusedTransfer?.assigned_operator_name && <div className="req-buyer">Tanker: {focusedTransfer.assigned_operator_name}</div>}
+                  {(focusedOrder?.status ?? focusedTransfer?.status) === "Pending" && !(focusedTransfer && isOutgoing(focusedTransfer)) && (
                     <div className="panel-actions">
                       <button className="btn btn-sm btn-secondary" disabled={!!busy}
                         onClick={() => focusedOrder ? act("order", focusedOrder.request_id, "reject") : act("transfer", focusedTransfer!.transfer_id, "reject")}>
@@ -307,7 +320,7 @@ export default function Supply() {
 
                 <section className="card">
                   <header className="card-head">
-                    <div><h2>Plant-to-plant transfers</h2><p>Other plants requesting water from you</p></div>
+                    <div><h2>Plant-to-plant transfers</h2><p>Requests from other plants, and water you've requested</p></div>
                     <button className="btn btn-sm btn-secondary" onClick={() => setRequestOpen(true)} disabled={!stp}><Plus /> Request water</button>
                   </header>
                   {transfers.length ? (
@@ -320,18 +333,23 @@ export default function Supply() {
                               <StatusBadge status={t.status} />
                             </div>
                             <p className="req-site row" style={{ gap: 6 }}>
-                              {t.destination_stp_name} <ArrowLeftRight size={13} className="muted" /> <span className="muted">your plant</span>
+                              {isOutgoing(t) ? (
+                                <><span className="muted">You requested from</span> {t.source_stp_name}</>
+                              ) : (
+                                <>{t.destination_stp_name} <ArrowLeftRight size={13} className="muted" /> <span className="muted">your plant</span></>
+                              )}
                             </p>
                             <div className="req-facts">
                               <span className="num"><b>{num(t.quantity_kld)}</b> KLD</span>
                               <span>{t.quality} grade</span>
                               {t.distance_km && <span className="num">{num(t.distance_km, 1)} km</span>}
                               <span>{when(t.requested_at)}</span>
+                              {t.assigned_operator_name && <span>Tanker: {t.assigned_operator_name}</span>}
                             </div>
                           </div>
                           <div className="req-actions">
                             <button className="btn btn-sm btn-ghost" onClick={() => view({ kind: "transfer", id: t.transfer_id })}><MapPinned /> View info</button>
-                            {t.status === "Pending" && (
+                            {t.status === "Pending" && !isOutgoing(t) && (
                               <>
                                 <button className="btn btn-sm btn-secondary" disabled={!!busy} onClick={() => act("transfer", t.transfer_id, "reject")}>
                                   {busy === `${t.transfer_id}:reject` ? <Spinner /> : <X />} Reject
@@ -346,7 +364,7 @@ export default function Supply() {
                       ))}
                     </ul>
                   ) : (
-                    <Empty icon={ArrowLeftRight} title="No transfer requests">When another plant asks you for treated water, it shows up here.</Empty>
+                    <Empty icon={ArrowLeftRight} title="No transfer requests">Requests from other plants, and water you request from them, show up here.</Empty>
                   )}
                 </section>
               </div>

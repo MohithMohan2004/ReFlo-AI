@@ -5,33 +5,119 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>ReFlow</title>
 <style>
-  :root { --brand:#1463d6; --ink:#0f172a; --muted:#64748b; --bg:#ffffff; }
-  @media (prefers-color-scheme: dark) { :root { --ink:#e2e8f0; --muted:#94a3b8; --bg:#0b1220; } }
+  :root { --brand:#1463d6; --ink:#0f172a; --muted:#64748b; --bg:#ffffff; --track:#e2e8f0; }
+  @media (prefers-color-scheme: dark) { :root { --ink:#e2e8f0; --muted:#94a3b8; --bg:#0b1220; --track:#1e293b; } }
   * { box-sizing:border-box; }
   body { margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center;
          padding:24px 16px; background:var(--bg); color:var(--ink);
          font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; text-align:center; }
   main { max-width:360px; }
-  img { width:72px; height:72px; }
+  .mark { width:72px; height:72px; }
   h1 { font-size:22px; margin:20px 0 8px; }
   h1 span { background:linear-gradient(90deg,#2f6bff,#0d9488); -webkit-background-clip:text; background-clip:text; color:transparent; }
   p { color:var(--muted); line-height:1.5; margin:0 0 24px; }
+  .spinner { width:28px; height:28px; margin:0 auto 24px; border-radius:50%;
+             border:3px solid var(--track); border-top-color:var(--brand); animation:spin .9s linear infinite; }
+  @keyframes spin { to { transform:rotate(360deg); } }
   button { background:var(--brand); color:#fff; border:0; border-radius:10px; padding:12px 28px;
            font-size:16px; font-weight:600; }
+  [hidden] { display:none !important; }
 </style>
 </head>
 <body>
 <main>
-  <img src="brand-mark.svg" alt="">
-  <h1>Re<span>Flow</span> can't connect</h1>
-  <p>Check your internet connection and try again.</p>
-  <button id="retry">Try again</button>
+  <!-- Everything is inline: Android shows this page under the server's address,
+       so relative files (images, scripts) would be fetched from the server that is down. -->
+  <svg class="mark" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+  <defs>
+    <linearGradient id="rf-sky" x1="0" y1="0" x2="0" y2="24" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#38bdf8"/>
+      <stop offset="1" stop-color="#0284c7"/>
+    </linearGradient>
+    <linearGradient id="rf-water" x1="0" y1="24" x2="0" y2="48" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#2563eb"/>
+      <stop offset="1" stop-color="#1e3a8a"/>
+    </linearGradient>
+    <linearGradient id="rf-sheen" x1="0" y1="0" x2="0" y2="48" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#fff" stop-opacity=".18"/>
+      <stop offset=".5" stop-color="#fff" stop-opacity="0"/>
+    </linearGradient>
+    <clipPath id="rf-tile"><rect width="48" height="48" rx="13"/></clipPath>
+  </defs>
+  <g clip-path="url(#rf-tile)">
+    <rect width="48" height="24" fill="url(#rf-sky)"/>
+    <rect y="24" width="48" height="24" fill="url(#rf-water)"/>
+    <rect y="24" width="48" height="5" fill="#fff" opacity=".08"/>
+    <path d="M-2 31.5c4-1.6 8-1.6 12 0s8 1.6 12 0s8-1.6 12 0s8 1.6 12 0s8-1.6 12 0" fill="none" stroke="#fff" stroke-width="1" opacity=".22"/>
+    <path d="M38.4,38a1.6,1.6 0 1,0 3.2,0a1.6,1.6 0 1,0 -3.2,0zM35.5,42.5a1,1 0 1,0 2,0a1,1 0 1,0 -2,0zM7.8,41a1.2,1.2 0 1,0 2.4,0a1.2,1.2 0 1,0 -2.4,0z" fill="#fff" opacity=".28"/>
+    <rect width="48" height="48" fill="url(#rf-sheen)"/>
+  </g>
+  <rect x=".5" y=".5" width="47" height="47" rx="12.5" fill="none" stroke="#fff" stroke-opacity=".16"/>
+  <g fill="none" stroke-width="4.2" stroke-linecap="round" stroke-linejoin="round">
+    <g stroke="#0b1a4a" opacity=".22" transform="translate(0 .9)">
+    <path d="M10.6 36L14.32 12.5L20.32 12.5C23.5 12.5 25.66 15.07 25.16 18.25C24.66 21.43 21.68 24 18.5 24M18 24L21.6 36"/>
+    <path d="M28.6 36L31.37 18.5C31.9 15.19 35.01 12.5 38.32 12.5L38.82 12.5"/>
+    <path d="M12.5 24L36.5 24"/>
+    </g>
+    <g stroke="#fff">
+    <path d="M10.6 36L14.32 12.5L20.32 12.5C23.5 12.5 25.66 15.07 25.16 18.25C24.66 21.43 21.68 24 18.5 24M18 24L21.6 36"/>
+    <path d="M28.6 36L31.37 18.5C31.9 15.19 35.01 12.5 38.32 12.5L38.82 12.5"/>
+    <path d="M12.5 24L36.5 24"/>
+    </g>
+  </g>
+</svg>
+  <h1 id="title">Connecting to Re<span>Flow</span></h1>
+  <p id="msg">The server is waking up. This can take up to a minute.</p>
+  <div class="spinner" id="spinner"></div>
+  <button id="retry" hidden>Try again</button>
 </main>
-<script src="server.js"></script>
 <script>
-  document.getElementById("retry").onclick = function () {
-    if (window.REFLOW_SERVER_URL) location.href = window.REFLOW_SERVER_URL; else location.reload();
-  };
+  // REFLOW_SERVER_URL is rewritten by capacitor.config.ts on every `cap sync`.
+  window.REFLOW_SERVER_URL = "https://reflow-w9xu.onrender.com";
+
+  var server = window.REFLOW_SERVER_URL;
+  var title = document.getElementById("title");
+  var msg = document.getElementById("msg");
+  var spinner = document.getElementById("spinner");
+  var retry = document.getElementById("retry");
+  var started = Date.now();
+  var timer = null;
+
+  function show(waiting) {
+    spinner.hidden = !waiting;
+    retry.hidden = waiting;
+    if (waiting) {
+      title.innerHTML = "Connecting to Re<span>Flow</span>";
+      msg.textContent = "The server is waking up. This can take up to a minute.";
+    } else if (!navigator.onLine) {
+      title.innerHTML = "You're offline";
+      msg.textContent = "Check your internet connection. ReFlow will reconnect on its own.";
+    } else {
+      title.innerHTML = "Re<span>Flow</span> can't connect";
+      msg.textContent = "The server isn't answering right now. ReFlow keeps trying in the background.";
+    }
+  }
+
+  // Ping the server; open the app as soon as it answers. The response is
+  // opaque (no-cors) but resolving at all means the server is up.
+  function attempt() {
+    clearTimeout(timer);
+    var ctrl = window.AbortController ? new AbortController() : null;
+    var abort = ctrl && setTimeout(function () { ctrl.abort(); }, 60000);
+    fetch(server + "/login", { mode: "no-cors", cache: "no-store", signal: ctrl && ctrl.signal })
+      .then(function () { location.replace(server); })
+      .catch(function () {
+        // Keep the "waking up" message for the first 90 s, then say it plainly.
+        show(navigator.onLine && Date.now() - started < 90000);
+        timer = setTimeout(attempt, 5000);
+      })
+      .then(function () { if (abort) clearTimeout(abort); });
+  }
+
+  retry.onclick = function () { started = Date.now(); show(true); attempt(); };
+  window.addEventListener("online", function () { started = Date.now(); show(true); attempt(); });
+  show(navigator.onLine);
+  attempt();
 </script>
 </body>
 </html>

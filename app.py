@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, request, render_template, redirect, url_for, send_file
+from flask import Flask, jsonify, request, render_template, redirect, url_for, send_file, Response
 from flask import session
 from functools import wraps
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -1665,7 +1665,7 @@ USERS_FILE = os.path.join(
 )
 
 users_lock = threading.Lock()
-orders_lock = threading.Lock()
+orders_lock = threading.RLock()  # re-entrant: locked helpers call offer_next_operator_for_order()
 
 USER_FIELDS = [
     "user_id",
@@ -6814,7 +6814,12 @@ def order_tanker_location(order_id):
     # ONLY the tanker assigned to THIS order
     # -----------------------------------------
 
-    tanker_operator_id = str(order.get("tanker_operator_id") or "").strip()
+    # Orders store the tanker in "assigned_operator_id".
+    tanker_operator_id = str(
+        order.get("assigned_operator_id")
+        or order.get("tanker_operator_id")
+        or ""
+    ).strip()
 
     if not tanker_operator_id:
         return jsonify({
@@ -7526,11 +7531,16 @@ def stp_orders():
     if str(session.get("role", "")).lower().strip() != "stp":
         return jsonify({"error": "Unauthorized"}), 403
 
+    # An STP account only ever sees its own plant's orders (they include
+    # buyer names and phone numbers), whatever ?stp_id= says.
     selected_stp_id = str(
-        request.args.get("stp_id")
+        session.get("stp_id")
         or session.get("selected_stp_id")
         or ""
     ).strip()
+
+    if not selected_stp_id:
+        return jsonify({"error": "No STP is assigned to this account."}), 403
 
     results = []
 
@@ -7539,7 +7549,7 @@ def stp_orders():
             for row in csv.DictReader(f):
                 row_stp_id = str(row.get("stp_id") or "").strip()
 
-                if selected_stp_id and row_stp_id != selected_stp_id:
+                if row_stp_id != selected_stp_id:
                     continue
 
                 results.append({
@@ -7559,7 +7569,8 @@ def stp_orders():
                     "delivery_lat": row.get("delivery_lat", ""),
                     "delivery_lon": row.get("delivery_lon", ""),
                     "total": order_invoice_total(row),
-                    "tanker_operator_id": row.get("tanker_operator_id", ""),
+                    "tanker_operator_id": row.get("assigned_operator_id") or row.get("tanker_operator_id", ""),
+                    "assigned_operator_name": row.get("assigned_operator_name", ""),
                 })
 
     results.sort(key=lambda x: x.get("created_at") or "", reverse=True)
@@ -7817,11 +7828,21 @@ def build_supply_context(selected_id):
                     # the selected STP is the SOURCE STP. Another STP
                     # requests water from it, so those requests are shown
                     # to this STP operator for accept/reject.
+                    # Requests this STP made itself are included too
+                    # (direction "outgoing"), so the requesting plant can
+                    # follow its request after submitting it.
                     source_stp_id = str(
                         row.get("source_stp_id") or ""
                     ).strip()
+                    destination_stp_id = str(
+                        row.get("destination_stp_id") or ""
+                    ).strip()
 
-                    if source_stp_id != selected_stp_id_for_transfers:
+                    if source_stp_id == selected_stp_id_for_transfers:
+                        direction = "incoming"
+                    elif destination_stp_id == selected_stp_id_for_transfers:
+                        direction = "outgoing"
+                    else:
                         continue
 
                     # Clean possible whitespace from CSV headers/values.
@@ -7831,16 +7852,22 @@ def build_supply_context(selected_id):
                             continue
                         clean_transfer[str(key).strip()] = value
 
+                    clean_transfer["direction"] = direction
+
                     transfer_status = str(
                         clean_transfer.get("status") or ""
                     ).strip()
 
-                    if transfer_status in {
+                    visible_statuses = {
                         "Pending",
                         "Accepted",
                         "Out for Delivery",
                         "Delivered"
-                    }:
+                    }
+                    if direction == "outgoing":
+                        visible_statuses.add("Rejected")
+
+                    if transfer_status in visible_statuses:
                         transfer_requests.append(clean_transfer)
 
             # Newest requests first.
@@ -7868,11 +7895,37 @@ def build_supply_context(selected_id):
         "transfer_requests": transfer_requests,
     }
 
+def _stp_write_denied(target_stp_id):
+    """Error response if the session may not change this plant's data, else None.
+
+    Plant operators may only change their own plant; admins may change any.
+    """
+    if not session.get("user_id"):
+        return jsonify({"success": False, "message": "Please log in first."}), 401
+    role = str(session.get("role") or "").strip().lower()
+    if role == "admin":
+        return None
+    if role != "stp":
+        return jsonify({"success": False, "message": "Unauthorized"}), 403
+    own_stp_id = str(session.get("stp_id") or session.get("selected_stp_id") or "").strip()
+    if not own_stp_id or str(target_stp_id or "").strip() != own_stp_id:
+        return jsonify({"success": False, "message": "You can only change your own plant."}), 403
+    return None
+
+
 @app.route("/update_capacity", methods=["POST"])
 def update_capacity():
 
-    stp_id = request.form["stp_id"]
-    new_capacity = float(request.form["available_capacity_mld"])
+    stp_id = request.form.get("stp_id", "")
+    denied = _stp_write_denied(stp_id)
+    if denied:
+        return denied
+    try:
+        new_capacity = float(request.form["available_capacity_mld"])
+        if new_capacity < 0:
+            raise ValueError
+    except (KeyError, TypeError, ValueError):
+        return "Invalid capacity", 400
 
     stps = load_stps()
 
@@ -7887,8 +7940,13 @@ def update_capacity():
 @app.route("/upload_quality", methods=["POST"])
 def upload_quality():
 
-    stp_id = request.form["stp_id"]
-    quality = request.form["quality_grade"]
+    stp_id = request.form.get("stp_id", "")
+    denied = _stp_write_denied(stp_id)
+    if denied:
+        return denied
+    quality = request.form.get("quality_grade", "").strip()
+    if quality not in {"Platinum", "Gold", "Silver", "General"}:
+        return "Invalid quality grade", 400
 
     stps = load_stps()
 
@@ -7911,6 +7969,14 @@ def handle_request():
 
     auto_reset_capacity()
 
+    logged_in_stp_id = str(
+        session.get("stp_id") or
+        session.get("selected_stp_id") or
+        ""
+    ).strip()
+
+    if not logged_in_stp_id:
+        return "No STP is assigned to this account", 403
 
     order_id = request.form["request_id"]
     action = request.form.get("action")
@@ -7930,6 +7996,10 @@ def handle_request():
         for row in reader:
 
             if row.get("order_id", "").strip() == order_id.strip():
+
+                # An STP may only accept or reject its own orders.
+                if str(row.get("stp_id") or "").strip() != logged_in_stp_id:
+                    return "This order is not for your STP", 403
 
                 stp_id_redirect = row.get("stp_id")
                 current_status = (row.get("status") or "").strip()
@@ -8101,8 +8171,32 @@ def update_order_status():
                             "error": "Unauthorized"
                         }), 403
 
+                # An STP may only change its own orders.
+                if user_role == "stp":
+                    logged_in_stp_id = str(
+                        session.get("stp_id") or
+                        session.get("selected_stp_id") or
+                        ""
+                    ).strip()
+                    if (
+                        not logged_in_stp_id
+                        or str(row.get("stp_id") or "").strip() != logged_in_stp_id
+                    ):
+                        return jsonify({
+                            "success": False,
+                            "error": "This order is not for your STP"
+                        }), 403
+
                 stp_id_redirect = row.get("stp_id")
                 current_status = row.get("status", "").strip()
+
+                # A buyer can only confirm a delivery that is on its way.
+                if user_role == "demand" and current_status not in {"Out for Delivery", "Delivered"}:
+                    return jsonify({
+                        "success": False,
+                        "error": "This order is not out for delivery yet"
+                    }), 400
+
                 status_order = {"Pending": 0, "Accepted": 1, "Out for Delivery": 2, "Delivered": 3, "Rejected": -1}
 
                 if (
@@ -12596,6 +12690,12 @@ def update_pricing():
             "success": False,
             "message": "STP ID is required"
         }), 400
+
+    # Prices go onto customer invoices: only the plant's own operator
+    # (or an admin) may change them.
+    denied = _stp_write_denied(stp_id)
+    if denied:
+        return denied
 
     try:
         base_price = float(data.get("base_price_per_kld"))
