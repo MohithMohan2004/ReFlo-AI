@@ -29,43 +29,15 @@
   <!-- Everything is inline: Android shows this page under the server's address,
        so relative files (images, scripts) would be fetched from the server that is down. -->
   <svg class="mark" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
-  <defs>
-    <linearGradient id="rf-sky" x1="0" y1="0" x2="0" y2="24" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#38bdf8"/>
-      <stop offset="1" stop-color="#0284c7"/>
-    </linearGradient>
-    <linearGradient id="rf-water" x1="0" y1="24" x2="0" y2="48" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#2563eb"/>
-      <stop offset="1" stop-color="#1e3a8a"/>
-    </linearGradient>
-    <linearGradient id="rf-sheen" x1="0" y1="0" x2="0" y2="48" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#fff" stop-opacity=".18"/>
-      <stop offset=".5" stop-color="#fff" stop-opacity="0"/>
-    </linearGradient>
-    <clipPath id="rf-tile"><rect width="48" height="48" rx="13"/></clipPath>
-  </defs>
-  <g clip-path="url(#rf-tile)">
-    <rect width="48" height="24" fill="url(#rf-sky)"/>
-    <rect y="24" width="48" height="24" fill="url(#rf-water)"/>
-    <rect y="24" width="48" height="5" fill="#fff" opacity=".08"/>
-    <path d="M-2 31.5c4-1.6 8-1.6 12 0s8 1.6 12 0s8-1.6 12 0s8 1.6 12 0s8-1.6 12 0" fill="none" stroke="#fff" stroke-width="1" opacity=".22"/>
-    <path d="M38.4,38a1.6,1.6 0 1,0 3.2,0a1.6,1.6 0 1,0 -3.2,0zM35.5,42.5a1,1 0 1,0 2,0a1,1 0 1,0 -2,0zM7.8,41a1.2,1.2 0 1,0 2.4,0a1.2,1.2 0 1,0 -2.4,0z" fill="#fff" opacity=".28"/>
-    <rect width="48" height="48" fill="url(#rf-sheen)"/>
-  </g>
-  <rect x=".5" y=".5" width="47" height="47" rx="12.5" fill="none" stroke="#fff" stroke-opacity=".16"/>
-  <g fill="none" stroke-width="4.2" stroke-linecap="round" stroke-linejoin="round">
-    <g stroke="#0b1a4a" opacity=".22" transform="translate(0 .9)">
-    <path d="M10.6 36L14.32 12.5L20.32 12.5C23.5 12.5 25.66 15.07 25.16 18.25C24.66 21.43 21.68 24 18.5 24M18 24L21.6 36"/>
-    <path d="M28.6 36L31.37 18.5C31.9 15.19 35.01 12.5 38.32 12.5L38.82 12.5"/>
-    <path d="M12.5 24L36.5 24"/>
+    <rect width="48" height="48" rx="12" fill="#fff"/>
+    <rect x=".5" y=".5" width="47" height="47" rx="11.5" fill="none" stroke="#0b3d91" stroke-opacity=".12"/>
+    <g transform="translate(9.12 9.12) scale(.62)">
+      <path d="M23 23H0A23 23 0 0 1 23 0Z" fill="#1463d6"/>
+      <path d="M25 0H48A23 23 0 0 1 25 23Z" fill="#38bdf8"/>
+      <path d="M0 25A23 23 0 0 1 23 48H0Z" fill="#7dd3fc"/>
+      <circle cx="36.5" cy="36.5" r="10.5" fill="#0b3d91"/>
     </g>
-    <g stroke="#fff">
-    <path d="M10.6 36L14.32 12.5L20.32 12.5C23.5 12.5 25.66 15.07 25.16 18.25C24.66 21.43 21.68 24 18.5 24M18 24L21.6 36"/>
-    <path d="M28.6 36L31.37 18.5C31.9 15.19 35.01 12.5 38.32 12.5L38.82 12.5"/>
-    <path d="M12.5 24L36.5 24"/>
-    </g>
-  </g>
-</svg>
+  </svg>
   <h1 id="title">Connecting to Re<span>Flow</span></h1>
   <p id="msg">The server is waking up. This can take up to a minute.</p>
   <div class="spinner" id="spinner"></div>
