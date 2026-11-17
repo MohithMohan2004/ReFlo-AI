@@ -73,6 +73,32 @@ class OcemsApiError(Exception):
     """A vendor call failed; the message is safe to show to users."""
 
 
+def _log(message):
+    print(f"OCEMS feed: {message}", flush=True)
+
+
+def _with_deadline(fn, seconds):
+    """Run fn() with a hard limit on total time. requests' own timeout is
+    per socket operation, so DNS lookups or a response that trickles in
+    slowly can otherwise block a refresh forever."""
+    box = {}
+
+    def run():
+        try:
+            box["value"] = fn()
+        except BaseException as e:  # handed back to the caller
+            box["error"] = e
+
+    worker = threading.Thread(target=run, name="ocems-call", daemon=True)
+    worker.start()
+    worker.join(seconds)
+    if worker.is_alive():
+        raise requests.Timeout(f"no complete response within {seconds} s")
+    if "error" in box:
+        raise box["error"]
+    return box["value"]
+
+
 # ---------------------------------------------------------------------------
 # Key encryption
 # ---------------------------------------------------------------------------
@@ -185,16 +211,25 @@ def _get_csv(base_url, api_key, path, params=None, provider="trata", timeout=REQ
     else:
         url = base_url + path
         headers[spec["key_header"]] = api_key
+    started = time.monotonic()
+    host = urlparse(url).hostname
     try:
-        res = requests.get(
-            url,
-            params=params,
-            headers=headers,
-            timeout=timeout,
-            allow_redirects=False,
+        res = _with_deadline(
+            lambda: requests.get(
+                url,
+                params=params,
+                headers=headers,
+                timeout=(15, timeout),
+                allow_redirects=False,
+            ),
+            timeout + 20,
         )
-    except requests.RequestException:
+    except requests.RequestException as e:
+        _log(f"{host} {urlparse(url).path} failed after {time.monotonic() - started:.1f} s: "
+             f"{type(e).__name__}: {str(e)[:160]}")
         raise OcemsApiError("Could not reach the OCEMS platform. Try again later.")
+    _log(f"{host} {urlparse(url).path} -> HTTP {res.status_code}, {len(res.content)} bytes "
+         f"in {time.monotonic() - started:.1f} s")
 
     if res.status_code == 401:
         raise OcemsApiError("The OCEMS platform rejected the API key.")
@@ -318,6 +353,7 @@ def merge_latest(history, latest):
 def _refresh(cache_key, base_url, api_key, provider):
     """Background job. Normally one quick latest-row call, merged into the
     cache; the full history only when missing or older than HISTORY_TTL."""
+    started = time.monotonic()
     try:
         with _cache_lock:
             entry = _cache.get(cache_key) or {}
@@ -345,7 +381,16 @@ def _refresh(cache_key, base_url, api_key, provider):
                 _store(cache_key, data=merge_latest(history, current) if current else history, history=True)
             except OcemsApiError as e:
                 _store(cache_key, error=e, ttl=ERROR_TTL)
+    except Exception as e:  # never leave the cache stuck "loading"
+        _log(f"{cache_key} refresh crashed: {type(e).__name__}: {e}")
+        _store(cache_key, error=OcemsApiError("Could not load OCEMS readings."), ttl=ERROR_TTL)
     finally:
+        with _cache_lock:
+            entry = _cache.get(cache_key) or {}
+            rows = len((entry.get("data") or {}).get("rows") or [])
+            error = entry.get("error")
+        _log(f"{cache_key} refresh done in {time.monotonic() - started:.1f} s: "
+             f"{rows} rows cached{f', error: {error}' if error else ''}")
         with _cache_lock:
             if cache_key in _cache:
                 _cache[cache_key]["thread"] = None
@@ -411,9 +456,10 @@ def start_warmer(list_connections, interval=CACHE_TTL):
                 for args in list_connections():
                     refresh_async(*args)
             except Exception as e:  # never let the warmer die
-                print("OCEMS warmer:", e)
+                _log(f"warmer error: {type(e).__name__}: {e}")
             time.sleep(interval)
     threading.Thread(target=loop, name="ocems-warmer", daemon=True).start()
+    _log(f"warmer started (pid {os.getpid()}, every {interval} s)")
 
 
 # ---------------------------------------------------------------------------
