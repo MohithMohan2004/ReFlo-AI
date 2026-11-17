@@ -10,6 +10,7 @@ import { Avatar, ROLE_META, UserMenu } from "../components/UserMenu";
 import { InvalidateOnResize, MapFrame, pinIcon } from "../components/map";
 import { Empty, Notice, SkeletonRows, StatusBadge } from "../components/ui";
 import { Dialog } from "../components/Dialog";
+import { LocationPicker, type PickedPoint } from "../components/LocationPicker";
 import { getJSON, postJSON } from "../lib/api";
 import { useToast } from "../lib/toast";
 import { useAsync } from "../lib/useAsync";
@@ -72,7 +73,7 @@ export default function Profile() {
           <DemandSummary />
         ) : role === "stp" ? (
           <>
-            <PlantCard plant={p.data?.plant ?? null} />
+            <PlantCard plant={p.data?.plant ?? null} onSaved={p.reload} />
             {p.data?.plant && <OcemsFeedCard />}
           </>
         ) : role === "tanker" ? (
@@ -177,7 +178,8 @@ function DemandSummary() {
   );
 }
 
-function PlantCard({ plant }: { plant: Stp | null }) {
+function PlantCard({ plant, onSaved }: { plant: Stp | null; onSaved: () => void }) {
+  const [editing, setEditing] = useState(false);
   if (!plant) return <div className="card"><Empty icon={Factory} title="No plant linked">This account isn't linked to a treatment plant yet.</Empty></div>;
   const total = (Number(plant.total_capacity_mld) || 0) * 1000;
   const avail = (Number(plant.available_capacity_mld) || 0) * 1000;
@@ -186,7 +188,10 @@ function PlantCard({ plant }: { plant: Stp | null }) {
       <div className="org-body">
         <header className="card-head" style={{ borderBottom: 0, padding: "18px 20px 6px" }}>
           <div><h2>{plant.stp_name}</h2><p className="num">{plant.stp_id}</p></div>
-          <span className="role-chip" data-tone="teal">{plant.quality_grade || "General"} grade</span>
+          <div className="row wrap" style={{ gap: 8 }}>
+            <span className="role-chip" data-tone="teal">{plant.quality_grade || "General"} grade</span>
+            <button type="button" className="btn btn-sm btn-secondary" onClick={() => setEditing(true)}><Pencil size={15} /> Edit details</button>
+          </div>
         </header>
         <div className="mini-stats">
           <Mini icon={Gauge} tone="teal" label="Capacity" value={num(total)} unit="KLD" />
@@ -201,7 +206,88 @@ function PlantCard({ plant }: { plant: Stp | null }) {
           <Marker position={[plant.latitude, plant.longitude]} icon={pinIcon("plant", "brand")} />
         </MapFrame>
       )}
+      {editing && <PlantDialog plant={plant} onClose={() => setEditing(false)} onSaved={() => { setEditing(false); onSaved(); }} />}
     </section>
+  );
+}
+
+const GRADES = ["General", "Bronze", "Silver", "Gold"];
+
+function PlantDialog({ plant, onClose, onSaved }: { plant: Stp; onClose: () => void; onSaved: () => void }) {
+  const toast = useToast();
+  const kld = (mld?: number) => (mld != null && Number.isFinite(Number(mld)) ? String(Math.round(Number(mld) * 1000 * 100) / 100) : "");
+  const [f, setF] = useState({
+    stp_name: plant.stp_name ?? "",
+    technology: plant.technology && plant.technology !== "Not Specified" ? plant.technology : "",
+    quality_grade: GRADES.includes(plant.quality_grade ?? "") ? plant.quality_grade! : "General",
+    total_capacity_kld: kld(plant.total_capacity_mld),
+    current_load_kld: kld(plant.current_load_mld ?? 0),
+    treatment_cost_per_kl: plant.treatment_cost_per_kl != null ? String(plant.treatment_cost_per_kl) : "",
+  });
+  const [loc, setLoc] = useState<PickedPoint | null>(
+    plant.latitude != null && plant.longitude != null ? { lat: plant.latitude, lon: plant.longitude, label: "Current location" } : null,
+  );
+  const [saving, setSaving] = useState(false);
+  const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setF((x) => ({ ...x, [k]: e.target.value }));
+
+  const total = Number(f.total_capacity_kld), load = Number(f.current_load_kld);
+  const problem =
+    !f.stp_name.trim() ? "Enter the plant name." :
+    !f.technology.trim() ? "Describe the treatment technology." :
+    !(total > 0) ? "Capacity must be greater than zero." :
+    f.current_load_kld === "" || load < 0 ? "Enter the current load (0 or more)." :
+    load > total ? "Current load can't exceed capacity." :
+    f.treatment_cost_per_kl === "" || Number(f.treatment_cost_per_kl) < 0 ? "Enter the treatment cost." :
+    !loc ? "Place the plant on the map." : null;
+
+  async function save(e: FormEvent) {
+    e.preventDefault();
+    if (problem) return toast(problem, "danger");
+    setSaving(true);
+    try {
+      await postJSON("/api/stp/details", { stp_id: plant.stp_id, ...f, latitude: loc!.lat, longitude: loc!.lon });
+      toast("Plant details saved.", "success");
+      onSaved();
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Could not save", "danger");
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Dialog title="Edit plant details" onClose={onClose}>
+      <form onSubmit={save} className="stack" autoComplete="off">
+        <label className="field"><span className="field-label">Plant name</span>
+          <input className="input" required value={f.stp_name} onChange={set("stp_name")} />
+        </label>
+        <div className="plant-edit-grid">
+          <label className="field"><span className="field-label">Technology</span>
+            <input className="input" required value={f.technology} onChange={set("technology")} placeholder="e.g. 450 KLD SBR" />
+          </label>
+          <label className="field"><span className="field-label">Quality grade</span>
+            <select className="select" value={f.quality_grade} onChange={set("quality_grade")}>
+              {GRADES.map((g) => <option key={g}>{g}</option>)}
+            </select>
+          </label>
+          <label className="field"><span className="field-label">Total capacity (KLD)</span>
+            <input className="input num" required type="number" min="0" step="any" inputMode="decimal" value={f.total_capacity_kld} onChange={set("total_capacity_kld")} />
+          </label>
+          <label className="field"><span className="field-label">Current load (KLD)</span>
+            <input className="input num" required type="number" min="0" step="any" inputMode="decimal" value={f.current_load_kld} onChange={set("current_load_kld")} />
+          </label>
+          <label className="field"><span className="field-label">Treatment cost (₹ / KL)</span>
+            <input className="input num" required type="number" min="0" step="any" inputMode="decimal" value={f.treatment_cost_per_kl} onChange={set("treatment_cost_per_kl")} />
+          </label>
+        </div>
+        <div className="field"><span className="field-label">Location</span>
+          <LocationPicker value={loc} onChange={setLoc} />
+        </div>
+        <div className="row" style={{ justifyContent: "flex-end", gap: 8 }}>
+          <button type="button" className="btn btn-ghost" onClick={onClose}>Cancel</button>
+          <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? "Saving…" : "Save details"}</button>
+        </div>
+      </form>
+    </Dialog>
   );
 }
 
@@ -317,7 +403,7 @@ function ConnectionRow({ conn, action }: { conn: OcemsConnection; action?: React
           <span className="badge" data-tone="success">Live</span>
         </div>
         <div className="feed-meta">
-          <span className="num">{conn.base_url.replace("https://", "")}</span> · {conn.provider_label} · key <span className="num">{conn.key_hint}</span>
+          <span className="num">{conn.base_url.replace("https://", "")}</span> · {conn.provider_label} · {conn.key_hint ? <>key <span className="num">{conn.key_hint}</span></> : "public link"}
         </div>
         <div className="feed-meta">{conn.test_message}</div>
         <div className="feed-meta">Connected {when(conn.submitted_at)}</div>

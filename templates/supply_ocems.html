@@ -640,6 +640,32 @@
         document.body.appendChild(a); a.click(); a.remove();
         setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
     });
+
+    // ---------- Live updates ----------
+    // The server polls the vendor every minute; check it for a newer
+    // reading and reload (keeping the scroll position) when one arrives.
+    var SCROLL_KEY = "reflow-ocems-scroll";
+    try {
+        var y = sessionStorage.getItem(SCROLL_KEY);
+        if (y !== null) { sessionStorage.removeItem(SCROLL_KEY); window.scrollTo(0, Number(y) || 0); }
+    } catch (e) { /* storage unavailable */ }
+
+    var shown = ROWS.length ? ROWS[0].timestamp : null;
+    function checkForNewReading() {
+        if (document.hidden) return;
+        var el = document.activeElement;
+        if (el && /^(INPUT|SELECT|TEXTAREA)$/.test(el.tagName)) return;   // don't interrupt the user
+        fetch("/api/ocems_summary/" + encodeURIComponent(STP), { credentials: "same-origin", cache: "no-store" })
+            .then(function (r) { return r.ok ? r.json() : null; })
+            .then(function (d) {
+                if (!d || !d.available || !d.timestamp || d.timestamp === shown) return;
+                try { sessionStorage.setItem(SCROLL_KEY, String(window.scrollY)); } catch (e) { /* ignore */ }
+                window.location.reload();
+            })
+            .catch(function () { /* offline: try again next time */ });
+    }
+    setInterval(checkForNewReading, 60000);
+    document.addEventListener("visibilitychange", function () { if (!document.hidden) checkForNewReading(); });
 })();
 </script>
 {% endif %}

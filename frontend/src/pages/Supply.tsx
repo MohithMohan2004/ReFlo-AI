@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Marker, Polyline, Popup } from "react-leaflet";
 import type { LatLngTuple } from "leaflet";
@@ -61,6 +61,23 @@ export default function Supply() {
     (s) => (stp ? getJSON<OcemsReading>(`/api/ocems_summary/${encodeURIComponent(stp.stp_id)}`, s) : Promise.resolve(null)),
     [stp?.stp_id],
   );
+
+  // The server polls the OCEMS vendor every minute; pick up new readings
+  // quietly (no skeleton) while the tab is visible.
+  const setOcems = ocems.setData;
+  useEffect(() => {
+    if (!stp) return;
+    const url = `/api/ocems_summary/${encodeURIComponent(stp.stp_id)}`;
+    const check = () => {
+      if (document.hidden) return;
+      getJSON<OcemsReading>(url)
+        .then((d) => setOcems((cur) => (d?.available && d.timestamp !== cur?.timestamp ? d : cur)))
+        .catch(() => { /* try again next time */ });
+    };
+    const id = window.setInterval(check, 60_000);
+    document.addEventListener("visibilitychange", check);
+    return () => { window.clearInterval(id); document.removeEventListener("visibilitychange", check); };
+  }, [stp?.stp_id, setOcems]);
 
   const [filter, setFilter] = useState<OrderFilter>("pending");
   const [busy, setBusy] = useState<string | null>(null);

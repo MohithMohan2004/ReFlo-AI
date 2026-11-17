@@ -481,6 +481,23 @@ def load_ocems_api_data(stp_id):
         "file": None,
     }
 
+
+def _active_ocems_feeds():
+    """(cache_key, base_url, credential, provider) for every live feed."""
+    feeds = []
+    for row in load_ocems_api_connections():
+        if row.get("status") != "approved":
+            continue
+        try:
+            credential = ocems_api.decrypt_key(row.get("api_key_enc"))
+        except (ocems_api.OcemsApiError, RuntimeError):
+            continue
+        feeds.append((row["connection_id"], row["base_url"], credential, row.get("provider") or "trata"))
+    return feeds
+
+
+ocems_api.start_warmer(_active_ocems_feeds)
+
 # =========================================================
 # TANKER VEHICLES
 # Added from File 1 without changing the existing
@@ -3292,6 +3309,85 @@ def api_profile():
             }
 
     return jsonify(profile_data)
+
+
+STP_GRADES = {"General", "Bronze", "Silver", "Gold"}
+
+
+@app.route("/api/stp/details", methods=["POST"])
+def api_stp_details_update():
+    """Plant operators (or admins) edit the plant's own details from
+    Profile: name, technology, grade, capacity, load, cost and location."""
+    body = request.get_json(silent=True) or {}
+    stp_id = str(body.get("stp_id") or "").strip()
+    denied = _stp_write_denied(stp_id)
+    if denied:
+        return denied
+
+    def fail(message):
+        return jsonify({"success": False, "error": message}), 400
+
+    stp_name = str(body.get("stp_name") or "").strip()[:120]
+    technology = str(body.get("technology") or "").strip()[:120]
+    quality_grade = str(body.get("quality_grade") or "").strip()
+    if not stp_name:
+        return fail("Enter the plant name.")
+    if not technology:
+        return fail("Describe the treatment technology.")
+    if quality_grade not in STP_GRADES:
+        return fail("Choose a quality grade.")
+    try:
+        total_mld = float(body.get("total_capacity_kld")) / 1000
+        load_mld = float(body.get("current_load_kld")) / 1000
+        cost = float(body.get("treatment_cost_per_kl"))
+        lat = float(body.get("latitude"))
+        lon = float(body.get("longitude"))
+    except (TypeError, ValueError):
+        return fail("Enter numbers for capacity, load, cost and location.")
+    if not all(math.isfinite(v) for v in (total_mld, load_mld, cost, lat, lon)):
+        return fail("Enter numbers for capacity, load, cost and location.")
+    if total_mld <= 0:
+        return fail("Capacity must be greater than zero.")
+    if load_mld < 0 or load_mld > total_mld:
+        return fail("Current load must be between 0 and the capacity.")
+    if cost < 0:
+        return fail("Treatment cost can't be negative.")
+    if not (-90 <= lat <= 90 and -180 <= lon <= 180):
+        return fail("Place the plant on the map.")
+
+    stps = load_stps()
+    plant = next((x for x in stps if str(x.get("stp_id")) == stp_id), None)
+    if plant is None:
+        return jsonify({"success": False, "error": "Plant not found."}), 404
+
+    # Shift available capacity by the change in headroom instead of
+    # resetting it, so water already committed to accepted orders stays
+    # committed until auto_reset_capacity() releases it.
+    def as_float(v):
+        try:
+            return float(v or 0)
+        except (TypeError, ValueError):
+            return 0.0
+    old_total = as_float(plant.get("total_capacity_mld"))
+    old_load = as_float(plant.get("current_load_mld"))
+    old_avail = as_float(plant.get("available_capacity_mld"))
+    available = old_avail + (total_mld - old_total) - (load_mld - old_load)
+    available = max(0.0, min(available, total_mld - load_mld))
+
+    plant.update({
+        "stp_name": stp_name,
+        "technology": technology,
+        "quality_grade": quality_grade,
+        "total_capacity_mld": round(total_mld, 6),
+        "current_load_mld": round(load_mld, 6),
+        "available_capacity_mld": round(available, 6),
+        "treatment_cost_per_kl": cost,
+        "latitude": lat,
+        "longitude": lon,
+    })
+    save_stps(stps)
+
+    return jsonify({"success": True, "plant": plant})
 
 
 # =========================================================
