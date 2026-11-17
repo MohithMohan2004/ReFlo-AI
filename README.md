@@ -76,7 +76,7 @@ The map shows the plant and the orders it serves. Opening an order draws its del
 **Also:**
 - A 7-day demand forecast.
 - Pricing control: base rate, peak-hour surcharge and off-peak discount.
-- Quality reporting through OCEMS (online effluent monitoring) uploads, checked against CPCB limits.
+- Live water-quality readings from each plant's OCEMS (online effluent monitoring) system, connected with the vendor's API key from the plant profile and checked against CPCB limits.
 - Plant-to-plant water transfers.
 
 ### For tanker partners
@@ -122,7 +122,7 @@ Totals for trips, water delivered and distance hauled, a 30-day chart of deliver
 ### For admins
 - Overview, plants, approvals and orders in one dashboard.
 - A city-wide order-density heat map with plant locations.
-- Approval of plant and tanker registrations and OCEMS quality reports.
+- Approval of plant and tanker registrations.
 
 ### Across the platform
 - **Juno**, a chat assistant that finds plants and answers questions in plain language.

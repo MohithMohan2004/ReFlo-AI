@@ -3,8 +3,8 @@ import { useSearchParams } from "react-router-dom";
 import { Marker, Polyline, Popup } from "react-leaflet";
 import type { LatLngTuple } from "leaflet";
 import {
-  ArrowLeftRight, ArrowRight, CalendarClock, Check, ClipboardList, Droplets, Factory, FileUp, Gauge, Inbox,
-  MapPinned, Navigation, Pencil, Phone, Plus, RefreshCw, Timer, TrendingUp, X,
+  ArrowLeftRight, ArrowRight, CalendarClock, Check, ClipboardList, Droplets, Factory, Gauge, Inbox,
+  MapPinned, Navigation, Pencil, Phone, Plus, RefreshCw, Timer, TrendingUp, X, Wifi,
 } from "lucide-react";
 import { AppShell } from "../components/AppShell";
 import { roleNav } from "../components/nav";
@@ -389,7 +389,12 @@ export default function Supply() {
                   </header>
                   <div className="card-body stack" style={{ gap: 14 }}>
                     <OcemsGrid reading={ocems.data} loading={ocems.loading} />
-                    <OcemsUpload onDone={ocems.reload} />
+                    {!ocems.loading && !ocems.data?.available && (
+                      <div className="upload-row">
+                        <span className="muted">No live feed connected</span>
+                        <a className="btn btn-sm btn-secondary" href="/profile"><Wifi /> Connect feed</a>
+                      </div>
+                    )}
                   </div>
                 </section>
 
@@ -448,34 +453,6 @@ function PricingCard({ pricing, onEdit }: { pricing: Pricing | null; onEdit: () 
         <Empty icon={Gauge} title="No pricing set" />
       )}
     </section>
-  );
-}
-
-function OcemsUpload({ onDone }: { onDone: () => void }) {
-  const toast = useToast();
-  const ref = useRef<HTMLInputElement>(null);
-  const [busy, setBusy] = useState(false);
-  async function upload(file: File) {
-    setBusy(true);
-    try {
-      await postForm("/ocems/upload", { ocems_file: file });
-      toast("OCEMS report uploaded. It will appear once an admin approves it.", "success");
-      onDone();
-    } catch (e) {
-      toast(e instanceof Error ? e.message : "Upload failed", "danger");
-    } finally {
-      setBusy(false);
-      if (ref.current) ref.current.value = "";
-    }
-  }
-  return (
-    <div className="upload-row">
-      <input ref={ref} type="file" accept=".xlsx,.xls" hidden onChange={(e) => e.target.files?.[0] && void upload(e.target.files[0])} />
-      <span className="muted">Daily report (.xlsx)</span>
-      <button className="btn btn-sm btn-secondary" onClick={() => ref.current?.click()} disabled={busy}>
-        {busy ? <Spinner /> : <FileUp />} Upload report
-      </button>
-    </div>
   );
 }
 

@@ -2,7 +2,7 @@ import { useState, type FormEvent } from "react";
 import { Marker } from "react-leaflet";
 import {
   AtSign, Building2, CircleCheck, ClipboardList, Droplets, Factory, Gauge, IdCard, LogOut, Pencil, Mail, MapPin, Phone,
-  Radar, ShieldCheck, Truck,
+  KeyRound, Radar, ShieldCheck, Truck, Unplug, Wifi,
 } from "lucide-react";
 import { AppShell } from "../components/AppShell";
 import { publicNav, roleNav } from "../components/nav";
@@ -71,7 +71,10 @@ export default function Profile() {
         ) : role === "demand" ? (
           <DemandSummary />
         ) : role === "stp" ? (
-          <PlantCard plant={p.data?.plant ?? null} />
+          <>
+            <PlantCard plant={p.data?.plant ?? null} />
+            {p.data?.plant && <OcemsFeedCard />}
+          </>
         ) : role === "tanker" ? (
           <OperatorCard op={p.data?.operator ?? null} />
         ) : null}
@@ -240,5 +243,142 @@ function Mini({ icon: Icon, tone, label, value, unit, small }: {
         <div className={small ? "mini-value small" : "mini-value num"}>{value}{unit && <small>{unit}</small>}</div>
       </div>
     </div>
+  );
+}
+
+interface OcemsConnection {
+  connection_id: string; stp_id: string; provider: string; provider_label: string; base_url: string; key_hint: string;
+  submitted_at: string; status: string; test_ok: boolean; test_message: string; tested_at: string; admin_remark: string;
+  reviewed_at: string;
+}
+interface OcemsConnectionData {
+  stp_id: string;
+  providers: { id: string; label: string; host_suffix: string }[];
+  active: OcemsConnection | null;
+}
+
+function OcemsFeedCard() {
+  const toast = useToast();
+  const c = useAsync((s) => getJSON<OcemsConnectionData>("/api/ocems/connection", s));
+  const [open, setOpen] = useState(false);
+  const active = c.data?.active ?? null;
+
+  async function disconnect() {
+    if (!window.confirm("Disconnect the live OCEMS feed? Your OCEMS page goes back to the last approved Excel report.")) return;
+    try {
+      await postJSON("/api/ocems/connection/remove", {});
+      toast("Live feed disconnected.", "success");
+      c.reload();
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Could not disconnect", "danger");
+    }
+  }
+
+  return (
+    <section className="card">
+      <header className="card-head">
+        <div><h2>OCEMS live feed</h2><p>Connect your plant's online monitoring system so quality readings update on their own</p></div>
+        {c.data && (
+          <button type="button" className="btn btn-sm btn-secondary" onClick={() => setOpen(true)}>
+            <KeyRound size={15} /> {active ? "Change key" : "Connect"}
+          </button>
+        )}
+      </header>
+      <div className="ocems-feed">
+        {c.loading && !c.data ? <SkeletonRows rows={2} /> : c.error ? <Notice tone="danger">{c.error}</Notice> : (
+          <>
+            {active ? (
+              <ConnectionRow conn={active} action={
+                <button type="button" className="btn btn-sm btn-ghost" onClick={disconnect}><Unplug size={15} /> Disconnect</button>
+              } />
+            ) : (
+              <Empty icon={Wifi} title="No live feed connected">
+                Ask your OCEMS vendor for the platform URL and API key, then connect them here. ReFlow checks that the key
+                returns data and starts using it straight away. Until then, your approved Excel reports are used.
+              </Empty>
+            )}
+          </>
+        )}
+      </div>
+      {open && c.data && (
+        <ConnectDialog providers={c.data.providers} onClose={() => setOpen(false)} onSaved={() => { setOpen(false); c.reload(); }} />
+      )}
+    </section>
+  );
+}
+
+function ConnectionRow({ conn, action }: { conn: OcemsConnection; action?: React.ReactNode }) {
+  return (
+    <div className="feed-row">
+      <span className="mini-icon" data-tone="teal"><Wifi size={16} /></span>
+      <div className="feed-main">
+        <div className="row wrap" style={{ gap: 8 }}>
+          <strong>Connected</strong>
+          <span className="badge" data-tone="success">Live</span>
+        </div>
+        <div className="feed-meta">
+          <span className="num">{conn.base_url.replace("https://", "")}</span> · {conn.provider_label} · key <span className="num">{conn.key_hint}</span>
+        </div>
+        <div className="feed-meta">{conn.test_message}</div>
+        <div className="feed-meta">Connected {when(conn.submitted_at)}</div>
+      </div>
+      {action}
+    </div>
+  );
+}
+
+function ConnectDialog({ providers, onClose, onSaved }: {
+  providers: OcemsConnectionData["providers"]; onClose: () => void; onSaved: () => void;
+}) {
+  const toast = useToast();
+  const [provider, setProvider] = useState(providers[0]?.id ?? "trata");
+  const [baseUrl, setBaseUrl] = useState("");
+  const [apiKey, setApiKey] = useState("");
+  const [saving, setSaving] = useState(false);
+  const suffix = providers.find((x) => x.id === provider)?.host_suffix ?? "";
+
+  async function save(e: FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      await postJSON("/api/ocems/connection", { provider, base_url: baseUrl, api_key: apiKey });
+      toast("Connected. Live OCEMS readings are now in use.", "success");
+      onSaved();
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Could not connect", "danger");
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Dialog title="Connect OCEMS live feed" onClose={onClose}>
+      <form onSubmit={save} className="stack" autoComplete="off">
+        {providers.length > 1 && (
+          <label className="field"><span className="field-label">Vendor</span>
+            <select className="input" value={provider} onChange={(e) => setProvider(e.target.value)}>
+              {providers.map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}
+            </select>
+          </label>
+        )}
+        {providers.length === 1 && <p className="muted" style={{ margin: 0, fontSize: 13 }}>Vendor: {providers[0].label}</p>}
+        <label className="field"><span className="field-label">Platform URL</span>
+          <input className="input" required value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)}
+            placeholder={`https://yoursite${suffix}`} inputMode="url" spellCheck={false} />
+        </label>
+        <label className="field"><span className="field-label">API key</span>
+          <input className="input" required type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)}
+            spellCheck={false} autoComplete="new-password" />
+        </label>
+        <p className="muted" style={{ margin: 0, fontSize: 12.5, display: "flex", gap: 6 }}>
+          <ShieldCheck size={14} style={{ flex: "0 0 14px", marginTop: 2 }} />
+          ReFlow checks that the key returns OCEMS data before saving it. The key is stored encrypted and only its last
+          four characters are ever shown.
+        </p>
+        <div className="row" style={{ justifyContent: "flex-end", gap: 8 }}>
+          <button type="button" className="btn btn-ghost" onClick={onClose}>Cancel</button>
+          <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? "Checking…" : "Check and connect"}</button>
+        </div>
+      </form>
+    </Dialog>
   );
 }

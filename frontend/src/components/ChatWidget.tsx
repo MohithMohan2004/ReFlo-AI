@@ -5,7 +5,7 @@ interface Msg { from: "bot" | "user"; text: string }
 
 const SUGGESTIONS: Record<string, string[]> = {
   demand: ["How do I place an order?", "What do the quality grades mean?", "Where is my order?"],
-  stp: ["How do I accept a request?", "How is pricing calculated?", "How do I upload OCEMS data?"],
+  stp: ["How do I accept a request?", "How is pricing calculated?", "How do I connect my OCEMS live feed?"],
   tanker: ["How do I accept a pickup?", "How does live tracking work?", "Show my active trips"],
 };
 
