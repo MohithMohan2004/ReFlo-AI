@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin | ReFlow</title>
-    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='brand-mark.svg') }}">
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='brand-mark.svg') }}?v=blocks">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css">
 
     <style>
@@ -269,7 +269,7 @@
 <body>
 
 {# ---------- Aggregates ---------- #}
-{% set agg = namespace(total=0, available=0, pending_orders=0, active_orders=0, done_orders=0, closed_orders=0, qty=0, stp_pending=0, ocems_pending=0) %}
+{% set agg = namespace(total=0, available=0, pending_orders=0, active_orders=0, done_orders=0, closed_orders=0, qty=0, stp_pending=0) %}
 {% for stp in stps %}
     {% set agg.total = agg.total + (stp.total_capacity_mld|float) %}
     {% set agg.available = agg.available + (stp.available_capacity_mld|float) %}
@@ -283,10 +283,9 @@
     {% else %}{% set agg.active_orders = agg.active_orders + 1 %}{% endif %}
 {% endfor %}
 {% for r in stp_registrations %}{% if (r.verification_status or "pending")|lower == "pending" %}{% set agg.stp_pending = agg.stp_pending + 1 %}{% endif %}{% endfor %}
-{% for sub in ocems_submissions %}{% if (sub.status or "pending")|lower == "pending" %}{% set agg.ocems_pending = agg.ocems_pending + 1 %}{% endif %}{% endfor %}
 {% set used = agg.total - agg.available %}
 {% set avail_pct = (agg.available / agg.total * 100) if agg.total > 0 else 0 %}
-{% set to_review = agg.stp_pending + pending_tanker_operators + agg.ocems_pending %}
+{% set to_review = agg.stp_pending + pending_tanker_operators %}
 
 {% macro status_pill(value) -%}
     {%- set v = (value or "pending")|lower -%}
@@ -435,16 +434,11 @@
                                         <span><strong>Tanker partners</strong><small>Check operator documents</small></span>
                                         <span class="n num">{{ pending_tanker_operators }}</span>
                                     </a>
-                                    <a href="#approvals" data-tab="approvals" data-scroll="ocems-reports" class="{{ 'clear' if not agg.ocems_pending }}">
-                                        <span class="ico sky"><svg class="i" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/><path d="M8 15l2-2 2 2 4-4"/></svg></span>
-                                        <span><strong>OCEMS reports</strong><small>Approve water-quality uploads</small></span>
-                                        <span class="n num">{{ agg.ocems_pending }}</span>
-                                    </a>
                                 </div>
                             {% else %}
                                 <div class="all-clear">
                                     <svg class="i" viewBox="0 0 24 24"><path d="m5 12 5 5 9-10"/></svg>
-                                    You're all caught up. No registrations or reports are waiting.
+                                    You're all caught up. No registrations are waiting.
                                 </div>
                             {% endif %}
                         </section>
@@ -655,35 +649,6 @@
                             </tbody>
                         </table>
                         <div class="no-results">Nothing waiting. Switch to "All" to see reviewed partners.</div>
-                    </div>
-                </section>
-
-                <section class="card flush" id="ocems-reports">
-                    <div class="card-head" style="padding-bottom:14px;">
-                        <div><h2>OCEMS reports</h2><p>Water-quality files uploaded by plant operators</p></div>
-                        <div class="seg" role="group" aria-label="Filter OCEMS reports" data-filter="ocemsTable">
-                            <button type="button" data-value="pending" aria-pressed="{{ 'true' if agg.ocems_pending else 'false' }}">Pending <b>{{ agg.ocems_pending }}</b></button>
-                            <button type="button" data-value="all" aria-pressed="{{ 'false' if agg.ocems_pending else 'true' }}">All <b>{{ ocems_submissions|length }}</b></button>
-                        </div>
-                    </div>
-                    <div class="table-wrap">
-                        <table id="ocemsTable">
-                            <thead><tr><th>Plant</th><th>File</th><th>Uploaded</th><th>Status</th><th class="r">Actions</th></tr></thead>
-                            <tbody>
-                                {% for sub in ocems_submissions %}
-                                    <tr data-status="{{ (sub.status or 'pending')|lower }}">
-                                        <td><span class="id">{{ sub.stp_id }}</span></td>
-                                        <td><span title="{{ sub.original_filename }}" style="display:inline-flex;align-items:center;gap:7px;"><svg class="i" viewBox="0 0 24 24" style="color:var(--success)"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/><path d="m9 13 6 6"/><path d="m15 13-6 6"/></svg>{{ sub.original_filename|truncate(32, True, "…") }}</span>{% if sub.admin_remark %}<span class="sub">“{{ sub.admin_remark }}”</span>{% endif %}</td>
-                                        <td class="num" style="font-size:12.5px;color:var(--muted);">{{ (sub.uploaded_at or "")|replace("T", " ") }}</td>
-                                        <td>{{ status_pill(sub.status or "Pending") }}</td>
-                                        <td><div class="actions"><a class="btn sm" href="{{ url_for('admin_view_ocems', submission_id=sub.submission_id) }}">{{ "Review" if (sub.status or "pending")|lower == "pending" else "View" }}<svg class="i" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg></a></div></td>
-                                    </tr>
-                                {% else %}
-                                    <tr class="empty-row"><td colspan="5">No OCEMS reports have been uploaded.</td></tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                        <div class="no-results">Nothing waiting. Switch to "All" to see reviewed reports.</div>
                     </div>
                 </section>
             </section>

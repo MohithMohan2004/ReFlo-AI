@@ -27,6 +27,8 @@ from dotenv import load_dotenv
 from supabase import create_client
 from config import Config
 import store
+import ocems_api
+from urllib.parse import urlparse
 
 # =========================================================
 # JUNO AI LLM GATEWAY (OPTIONAL)
@@ -368,65 +370,116 @@ TANKER_REGISTRATIONS_FILE = os.path.join(
     "tanker_registrations.csv"
 )
 
-OCEMS_DIR = os.path.join(
-    BASE_DIR,
-    "database",
-    "ocems"
-)
-
 # =========================================================
-# OCEMS UPLOAD / APPROVAL
+# OCEMS API CONNECTIONS
+# A plant enters its vendor platform URL + API key on the
+# profile page. The key is saved only if a test call returns
+# OCEMS data, and then feeds load_ocems_data() straight away.
+# This is the only source of OCEMS readings.
 # =========================================================
 
-OCEMS_UPLOAD_DIR = os.path.join(
-    BASE_DIR,
-    "uploads",
-    "ocems"
-)
-
-OCEMS_SUBMISSIONS_FILE = os.path.join(
+OCEMS_API_FILE = os.path.join(
     DATABASE_DIR,
-    "ocems_submissions.csv"
+    "ocems_api_connections.csv"
 )
 
-os.makedirs(
-    OCEMS_UPLOAD_DIR,
-    exist_ok=True
-)
-
-OCEMS_SUBMISSION_FIELDS = [
-    "submission_id",
+OCEMS_API_FIELDS = [
+    "connection_id",
     "stp_id",
-    "original_filename",
-    "stored_filename",
-    "uploaded_at",
-    "status",
+    "provider",
+    "base_url",
+    "api_key_enc",
+    "key_hint",
+    "submitted_by",
+    "submitted_at",
+    "status",           # approved (active) | replaced | removed
+    "test_ok",
+    "test_message",
+    "tested_at",
     "admin_remark",
-    "approved_at",
-    "approved_by"
+    "reviewed_at",
+    "reviewed_by",
 ]
 
+ocems_api_lock = threading.RLock()
 
-def ensure_ocems_submissions_file():
 
-    if (
-        not store.exists(OCEMS_SUBMISSIONS_FILE)
-        or store.getsize(OCEMS_SUBMISSIONS_FILE) == 0
-    ):
+def load_ocems_api_connections():
+    with ocems_api_lock:
+        if (
+            not store.exists(OCEMS_API_FILE)
+            or store.getsize(OCEMS_API_FILE) == 0
+        ):
+            return []
+        with store.open(OCEMS_API_FILE, "r", newline="", encoding="utf-8") as f:
+            return list(csv.DictReader(f))
 
-        with store.open(
-            OCEMS_SUBMISSIONS_FILE,
-            "w",
-            newline="",
-            encoding="utf-8"
-        ) as f:
 
-            writer = csv.DictWriter(
-                f,
-                fieldnames=OCEMS_SUBMISSION_FIELDS
-            )
-
+def save_ocems_api_connections(rows):
+    with ocems_api_lock:
+        with store.open(OCEMS_API_FILE, "w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=OCEMS_API_FIELDS, extrasaction="ignore")
             writer.writeheader()
+            writer.writerows(rows)
+
+
+def get_active_ocems_api(stp_id):
+    stp_id = str(stp_id or "").strip()
+    for row in reversed(load_ocems_api_connections()):
+        if row.get("stp_id") == stp_id and row.get("status") == "approved":
+            return row
+    return None
+
+
+def public_ocems_api(row):
+    """A connection as the plant/admin may see it: never the key itself."""
+    if not row:
+        return None
+    return {
+        key: row.get(key, "")
+        for key in OCEMS_API_FIELDS
+        if key not in {"api_key_enc", "submitted_by", "reviewed_by"}
+    } | {
+        "provider_label": ocems_api.PROVIDERS.get(
+            row.get("provider"), {}
+        ).get("label", row.get("provider", "")),
+        "test_ok": row.get("test_ok") == "1",
+    }
+
+
+def load_ocems_api_data(stp_id):
+    """Readings from the plant's approved API connection, in the shape
+    load_ocems_data() returns, or None when there is no usable feed."""
+    connection = get_active_ocems_api(stp_id)
+    if not connection:
+        return None
+    try:
+        api_key = ocems_api.decrypt_key(connection.get("api_key_enc"))
+        parsed = ocems_api.cached_history(
+            connection["connection_id"],
+            connection["base_url"],
+            api_key,
+            connection.get("provider") or "trata",
+        )
+    except ocems_api.OcemsApiError as e:
+        print(f"OCEMS API ({stp_id}): {e}")
+        return None
+
+    if not parsed["rows"]:
+        return None
+
+    stp = get_stp_by_id(stp_id) or {}
+    return {
+        "available": True,
+        "source": "api",
+        "company_name": stp.get("stp_name") or stp_id,
+        "station_name": urlparse(connection["base_url"]).hostname.split(".")[0],
+        "parameters": parsed["parameters"],
+        "units": parsed["units"],
+        "rows": parsed["rows"],
+        "latest": parsed["rows"][0],
+        "file": None,
+    }
 
 # =========================================================
 # TANKER VEHICLES
@@ -2062,277 +2115,44 @@ def astar_distance(lat1, lon1, lat2, lon2):
 
     return distance_km
 
-def get_ocems_file(stp_id):
-    """
-    Returns the OCEMS Excel file associated with an STP.
-    Example:
-        PSTP015 -> database/ocems/PSTP015.xlsx
-    """
-
-    stp_id = str(stp_id or "").strip()
-
-    if not stp_id:
-        return None
-
-    return os.path.join(
-        OCEMS_DIR,
-        f"{stp_id}.xlsx"
-    )
+OCEMS_DEFAULT_LIMITS = {
+    "pH": "6.5 - 8.5",
+    "BOD": "<= 10",
+    "COD": "<= 50",
+    "TSS": "<= 10"
+}
 
 
 def load_ocems_data(stp_id):
     """
-    Reads the OCEMS Excel file.
-
-    Expected Excel structure:
-
-    Row 1:
-        Company Name | Puravankara Project Limited A & B
-
-    Row 2:
-        Station Name | WWTP
-
-    Row 3:
-        Parameter Name | pH | BOD | COD | TSS
-
-    Row 4:
-        Permissible Range | - | - | - | -
-
-    Row 5 onwards:
-        Timestamp | pH | BOD | COD | TSS
+    OCEMS readings for a plant, from its connected live API feed
+    (see ocems_api.py). Plants without a working feed have no data.
     """
 
-    file_path = get_ocems_file(stp_id)
+    live = load_ocems_api_data(stp_id)
 
-    if not file_path or not store.exists(file_path):
-        return {
-            "available": False,
-            "company_name": None,
-            "station_name": None,
-            "parameters": [],
-            "rows": [],
-            "latest": None,
-            "file": file_path
+    if live:
+        live["permissible_ranges"] = {
+            parameter: OCEMS_DEFAULT_LIMITS.get(parameter, "-")
+            for parameter in live["parameters"]
         }
+        return live
 
-    try:
-
-        # Read the Average sheet exactly as supplied
-        df = pd.read_excel(
-            file_path,
-            sheet_name="Average",
-            header=None
-        )
-
-        if df.empty:
-            return {
-                "available": False,
-                "company_name": None,
-                "station_name": None,
-                "parameters": [],
-                "rows": [],
-                "latest": None,
-                "file": file_path
-            }
-
-        # ----------------------------------------
-        # METADATA
-        # ----------------------------------------
-
-        # Some exports have an empty first column, so find the column that
-        # holds the row labels ("Company Name", "Station Name", ...) and
-        # read values from the column after it.
-        label_col = 0
-        for col in range(min(len(df.columns), 4)):
-            cell = df.iloc[0, col] if len(df) > 0 else None
-            if pd.notna(cell) and str(cell).strip().lower() == "company name":
-                label_col = col
-                break
-        value_col = label_col + 1
-
-        def _cell(row, col):
-            if row < len(df) and col < len(df.columns) and pd.notna(df.iloc[row, col]):
-                return str(df.iloc[row, col]).strip()
-            return None
-
-        company_name = _cell(0, value_col)
-        station_name = _cell(1, value_col)
-
-        # ----------------------------------------
-        # PARAMETERS
-        # ----------------------------------------
-
-        # (parameter name, column index)
-        parameter_columns = []
-
-        if len(df) > 2:
-            for col in range(value_col, len(df.columns)):
-                parameter = _cell(2, col)
-                if parameter:
-                    parameter_columns.append((parameter, col))
-
-        parameters = [name for name, _ in parameter_columns]
-
-        # ----------------------------------------
-        # PERMISSIBLE RANGE
-        # ----------------------------------------
-
-        # Default permissible ranges used when
-        # the OCEMS Excel file does not provide
-        # a valid limit.
-
-        
-        DEFAULT_PERMISSIBLE_RANGES = {
-            "pH": "6.5 - 8.5",
-            "BOD": "<= 10",
-            "COD": "<= 50",
-            "TSS": "<= 10"
-        }
+    return {
+        "available": False,
+        "source": None,
+        "company_name": None,
+        "station_name": None,
+        "parameters": [],
+        "permissible_ranges": {},
+        "units": {},
+        "rows": [],
+        "latest": None,
+    }
 
 
-        permissible_ranges = {}
-
-        invalid_values = [
-            "",
-            "-",
-            "—",
-            "NA",
-            "N/A",
-            "na",
-            "n/a",
-            "null",
-            "None",
-            "none",
-            "nan"
-        ]
-
-        for parameter, index in parameter_columns:
-
-            # Try to read the permissible value from Excel
-            excel_value = _cell(3, index)
-
-            # If Excel contains a valid value, use it
-            if excel_value and excel_value not in invalid_values:
-
-                permissible_ranges[parameter] = excel_value
-
-            # Otherwise use the system default
-            elif parameter in DEFAULT_PERMISSIBLE_RANGES:
-
-                permissible_ranges[parameter] = (
-                    DEFAULT_PERMISSIBLE_RANGES[parameter]
-                )
-
-            # Unknown parameter
-            else:
-
-                permissible_ranges[parameter] = "-"
-
-        
-        # Apply the project's configured OCEMS limits.
-        # These override older limits stored in Excel.
-        permissible_ranges.update(
-            DEFAULT_PERMISSIBLE_RANGES
-        )
 
 
-        # ----------------------------------------
-        # ACTUAL READINGS
-        # ----------------------------------------
-
-        rows = []
-
-        # Data begins after:
-        # 0 = Company
-        # 1 = Station
-        # 2 = Parameter
-        # 3 = Permissible range
-        #
-        # Therefore readings start from row 4
-
-        for row_index in range(4, len(df)):
-
-            timestamp = df.iloc[row_index, label_col]
-
-            if pd.isna(timestamp):
-                continue
-
-            row_data = {
-                "timestamp": str(timestamp)
-            }
-
-            for parameter, column_index in parameter_columns:
-
-                value = df.iloc[row_index, column_index]
-
-                if pd.isna(value):
-                    row_data[parameter] = None
-
-                else:
-
-                    # Convert numeric Excel values into normal numbers
-                    try:
-
-                        numeric_value = float(value)
-
-                        if numeric_value.is_integer():
-                            numeric_value = int(numeric_value)
-
-                        row_data[parameter] = numeric_value
-
-                    except (ValueError, TypeError):
-
-                        row_data[parameter] = str(value).strip()
-
-            rows.append(row_data)
-
-        # ----------------------------------------
-        # SORT BY TIMESTAMP
-        # ----------------------------------------
-
-        def parse_timestamp(row):
-
-            try:
-                return pd.to_datetime(
-                    row["timestamp"],
-                    dayfirst=True
-                )
-            except:
-                return pd.Timestamp.min
-
-        rows.sort(
-            key=parse_timestamp,
-            reverse=True
-        )
-
-        latest = rows[0] if rows else None
-
-        return {
-            "available": bool(rows),
-            "company_name": company_name,
-            "station_name": station_name,
-            "parameters": parameters,
-            "permissible_ranges": permissible_ranges,
-            "rows": rows,
-            "latest": latest,
-            "file": file_path
-        }
-
-    except Exception as e:
-
-        print("OCEMS EXCEL LOAD ERROR:", repr(e))
-
-        return {
-            "available": False,
-            "company_name": None,
-            "station_name": None,
-            "parameters": [],
-            "rows": [],
-            "latest": None,
-            "file": file_path,
-            "error": str(e)
-        }
-    
 # =========================================================
 # HOME + LOGIN
 # =========================================================
@@ -3472,6 +3292,114 @@ def api_profile():
             }
 
     return jsonify(profile_data)
+
+
+# =========================================================
+# OCEMS API CONNECTION (plant side, from the profile page)
+# =========================================================
+
+def _session_stp_id():
+    if str(session.get("role") or "").strip().lower() != "stp":
+        return None
+    return str(session.get("stp_id") or session.get("selected_stp_id") or "").strip() or None
+
+
+@app.route("/api/ocems/connection")
+def api_ocems_connection():
+    if not session.get("user_id"):
+        return jsonify({"success": False, "error": "Login required"}), 401
+    stp_id = _session_stp_id()
+    if not stp_id:
+        return jsonify({"success": False, "error": "Only plant accounts can connect an OCEMS feed."}), 403
+
+    mine = [r for r in load_ocems_api_connections() if r.get("stp_id") == stp_id]
+    active = next((r for r in reversed(mine) if r.get("status") == "approved"), None)
+
+    return jsonify({
+        "success": True,
+        "stp_id": stp_id,
+        "providers": [
+            {"id": key, "label": spec["label"], "host_suffix": spec["host_suffix"]}
+            for key, spec in ocems_api.PROVIDERS.items()
+        ],
+        "active": public_ocems_api(active),
+    })
+
+
+@app.route("/api/ocems/connection", methods=["POST"])
+def api_ocems_connection_submit():
+    if not session.get("user_id"):
+        return jsonify({"success": False, "error": "Login required"}), 401
+    stp_id = _session_stp_id()
+    if not stp_id or not get_stp_by_id(stp_id):
+        return jsonify({"success": False, "error": "Only plant accounts can connect an OCEMS feed."}), 403
+
+    body = request.get_json(silent=True) or {}
+    provider = str(body.get("provider") or "trata").strip().lower()
+    api_key = str(body.get("api_key") or "").strip()
+
+    if provider not in ocems_api.PROVIDERS:
+        return jsonify({"success": False, "error": "Unsupported OCEMS provider."}), 400
+    if not 8 <= len(api_key) <= 512 or any(c.isspace() for c in api_key):
+        return jsonify({"success": False, "error": "Enter the API key exactly as your vendor sent it."}), 400
+    try:
+        base_url = ocems_api.normalise_base_url(body.get("base_url"), provider)
+    except ocems_api.OcemsApiError as e:
+        return jsonify({"success": False, "error": str(e)}), 400
+
+    # The key is only saved if it actually returns OCEMS data.
+    test_ok, test_message = ocems_api.test_connection(base_url, api_key, provider)
+    if not test_ok:
+        return jsonify({"success": False, "error": test_message}), 400
+    now = datetime.now().isoformat(timespec="seconds")
+
+    with ocems_api_lock:
+        rows = load_ocems_api_connections()
+        # One live feed per plant: a working new key replaces the old one.
+        for row in rows:
+            if row.get("stp_id") == stp_id and row.get("status") in {"approved", "pending"}:
+                row["status"] = "replaced"
+                ocems_api.clear_cache(row.get("connection_id"))
+        rows.append({
+            "connection_id": "OCAPI-" + uuid.uuid4().hex[:10].upper(),
+            "stp_id": stp_id,
+            "provider": provider,
+            "base_url": base_url,
+            "api_key_enc": ocems_api.encrypt_key(api_key),
+            "key_hint": ocems_api.key_hint(api_key),
+            "submitted_by": str(session.get("user_id") or ""),
+            "submitted_at": now,
+            "status": "approved",
+            "test_ok": "1",
+            "test_message": test_message,
+            "tested_at": now,
+            "admin_remark": "",
+            "reviewed_at": now,
+            "reviewed_by": "auto-verified",
+        })
+        save_ocems_api_connections(rows)
+
+    return jsonify({"success": True, "test_message": test_message})
+
+
+@app.route("/api/ocems/connection/remove", methods=["POST"])
+def api_ocems_connection_remove():
+    """Disconnect the plant's live feed."""
+    if not session.get("user_id"):
+        return jsonify({"success": False, "error": "Login required"}), 401
+    stp_id = _session_stp_id()
+    if not stp_id:
+        return jsonify({"success": False, "error": "Only plant accounts can connect an OCEMS feed."}), 403
+
+    with ocems_api_lock:
+        rows = load_ocems_api_connections()
+        for row in rows:
+            if row.get("stp_id") == stp_id and row.get("status") in {"approved", "pending"}:
+                row["status"] = "removed"
+                ocems_api.clear_cache(row.get("connection_id"))
+        save_ocems_api_connections(rows)
+
+    return jsonify({"success": True})
 
 
 @app.route("/api/current_user")
@@ -5629,33 +5557,6 @@ def admin_dashboard():
 
 
     # =========================
-    # LOAD OCEMS SUBMISSIONS
-    # =========================
-
-    ensure_ocems_submissions_file()
-
-    ocems_submissions = []
-
-    if (
-        store.exists(OCEMS_SUBMISSIONS_FILE)
-        and store.getsize(OCEMS_SUBMISSIONS_FILE) > 0
-    ):
-
-        with store.open(
-            OCEMS_SUBMISSIONS_FILE,
-            "r",
-            newline="",
-            encoding="utf-8"
-        ) as f:
-
-            reader = csv.DictReader(f)
-
-            ocems_submissions = list(reader)
-
-
-    # Newest first
-    ocems_submissions.reverse()
-    # =========================
     # ADMIN PAGE
     # =========================
 
@@ -5687,9 +5588,7 @@ def admin_dashboard():
             vehicles_by_operator,
 
         documents_by_vehicle=
-            documents_by_vehicle,
-
-        ocems_submissions=ocems_submissions
+            documents_by_vehicle
     )
 
 @app.route("/admin/tanker/<operator_id>/status/<status>")
@@ -16624,558 +16523,6 @@ def _complete_transfer_locked():
         url_for("tanker_dashboard")
     )
 
-# =========================================================
-# OCEMS REPORT UPLOAD
-# =========================================================
-
-@app.route(
-    "/ocems/upload",
-    methods=["POST"]
-)
-@login_required(role="stp")
-def upload_ocems_report():
-
-    # -----------------------------------------
-    # GET CURRENT STP
-    # -----------------------------------------
-
-    stp_id = str(
-        session.get("stp_id")
-        or session.get("selected_stp_id")
-        or ""
-    ).strip()
-
-    if not stp_id:
-        return "STP not identified.", 400
-
-
-    # -----------------------------------------
-    # GET FILE
-    # -----------------------------------------
-
-    uploaded_file = request.files.get("ocems_file")
-
-    if (
-        uploaded_file is None
-        or not uploaded_file.filename
-    ):
-        return (
-            "Please select an OCEMS Excel file.",
-            400
-        )
-
-
-    # -----------------------------------------
-    # FILE NAME
-    # -----------------------------------------
-
-    original_filename = secure_filename(
-        uploaded_file.filename
-    )
-
-    extension = os.path.splitext(
-        original_filename
-    )[1].lower()
-
-
-    # -----------------------------------------
-    # ONLY EXCEL
-    # -----------------------------------------
-
-    if extension not in {
-        ".xlsx",
-        ".xls"
-    }:
-        original_filename = secure_filename(
-        uploaded_file.filename
-    )
-
-    extension = os.path.splitext(
-        original_filename
-    )[1].lower()
-
-    if extension != ".xlsx":
-        return (
-            "Only .xlsx OCEMS Excel files are allowed.",
-            400
-        )
-
-
-    # -----------------------------------------
-    # MAX FILE SIZE: 10 MB
-    # -----------------------------------------
-
-    uploaded_file.seek(
-        0,
-        os.SEEK_END
-    )
-
-    file_size = uploaded_file.tell()
-
-    uploaded_file.seek(0)
-
-    if file_size > 10 * 1024 * 1024:
-        return (
-            "OCEMS file must be 10 MB or smaller.",
-            400
-        )
-
-
-    # -----------------------------------------
-    # CREATE SUBMISSION ID
-    # -----------------------------------------
-
-    submission_id = (
-        "OCEMS-"
-        + uuid.uuid4().hex[:12].upper()
-    )
-
-
-    # -----------------------------------------
-    # UNIQUE STORED NAME
-    # -----------------------------------------
-
-    stored_filename = (
-        f"{stp_id}_"
-        f"{uuid.uuid4().hex[:12]}"
-        f"{extension}"
-    )
-
-    stored_filename = secure_filename(
-        stored_filename
-    )
-
-
-    stored_path = os.path.join(
-        OCEMS_UPLOAD_DIR,
-        stored_filename
-    )
-
-
-    # -----------------------------------------
-    # SAVE FILE
-    # -----------------------------------------
-
-    uploaded_file.save(
-        stored_path
-    )
-
-
-    # -----------------------------------------
-    # SAVE SUBMISSION RECORD
-    # -----------------------------------------
-
-    ensure_ocems_submissions_file()
-
-    new_submission = {
-
-        "submission_id":
-            submission_id,
-
-        "stp_id":
-            stp_id,
-
-        "original_filename":
-            original_filename,
-
-        "stored_filename":
-            stored_filename,
-
-        "uploaded_at":
-            datetime.now().isoformat(
-                timespec="seconds"
-            ),
-
-        "status":
-            "pending",
-
-        "admin_remark":
-            "",
-
-        "approved_at":
-            "",
-
-        "approved_by":
-            ""
-    }
-
-
-    with store.open(
-        OCEMS_SUBMISSIONS_FILE,
-        "a",
-        newline="",
-        encoding="utf-8"
-    ) as f:
-
-        writer = csv.DictWriter(
-            f,
-            fieldnames=OCEMS_SUBMISSION_FIELDS
-        )
-
-        writer.writerow(
-            new_submission
-        )
-
-
-    return redirect(
-        url_for(
-            "supply",
-            stp_id=stp_id
-        )
-    )
-
-# =========================================================
-# ADMIN - VIEW OCEMS DOCUMENT
-# =========================================================
-
-@app.route(
-    "/admin/ocems/<submission_id>/view"
-)
-@login_required(role="admin")
-def admin_view_ocems(submission_id):
-
-    ensure_ocems_submissions_file()
-
-    submission = None
-
-    with store.open(
-        OCEMS_SUBMISSIONS_FILE,
-        "r",
-        newline="",
-        encoding="utf-8"
-    ) as f:
-
-        reader = csv.DictReader(f)
-
-        for row in reader:
-
-            if (
-                str(
-                    row.get("submission_id") or ""
-                ).strip()
-                ==
-                str(submission_id).strip()
-            ):
-
-                submission = row
-                break
-
-
-    if submission is None:
-        return "OCEMS submission not found.", 404
-
-
-    stored_filename = os.path.basename(
-        str(
-            submission.get("stored_filename")
-            or ""
-        ).strip()
-    )
-
-
-    file_path = os.path.join(
-        OCEMS_UPLOAD_DIR,
-        stored_filename
-    )
-
-
-    if not os.path.isfile(file_path):
-        return "Uploaded OCEMS file not found.", 404
-
-
-    try:
-
-        df = pd.read_excel(
-            file_path,
-            sheet_name="Average",
-            header=None
-        )
-
-        # Hide columns that are completely empty (some exports start with
-        # a blank column) so the preview lines up with the data.
-        html_table = df.dropna(how="all", axis=1).fillna("").to_html(
-            index=False,
-            header=False,
-            border=0,
-            classes="ocems-preview-table"
-        )
-
-    except Exception as e:
-
-        return (
-            f"Could not read OCEMS document: {e}",
-            400
-        )
-
-
-    return render_template(
-        "admin_ocems_view.html",
-        submission=submission,
-        html_table=html_table
-    )
-
-# =========================================================
-# ADMIN - REVIEW OCEMS
-# =========================================================
-
-@app.route(
-    "/admin/ocems/<submission_id>/review",
-    methods=["POST"]
-)
-@login_required(role="admin")
-def admin_review_ocems(submission_id):
-
-    action = str(
-        request.form.get("action") or ""
-    ).strip().lower()
-
-    admin_remark = str(
-        request.form.get("admin_remark") or ""
-    ).strip()
-
-
-    if action not in {
-        "approved",
-        "rejected"
-    }:
-
-        return (
-            "Invalid OCEMS review action.",
-            400
-        )
-
-
-    if (
-        action == "rejected"
-        and not admin_remark
-    ):
-
-        return (
-            "Please provide a reason for rejection.",
-            400
-        )
-
-
-    ensure_ocems_submissions_file()
-
-    rows = []
-
-    submission = None
-
-
-    with store.open(
-        OCEMS_SUBMISSIONS_FILE,
-        "r",
-        newline="",
-        encoding="utf-8"
-    ) as f:
-
-        reader = csv.DictReader(f)
-
-        fieldnames = (
-            reader.fieldnames
-            or OCEMS_SUBMISSION_FIELDS
-        )
-
-        rows = list(reader)
-
-
-    # -----------------------------------------
-    # FIND SUBMISSION
-    # -----------------------------------------
-
-    for row in rows:
-
-        if (
-            str(
-                row.get("submission_id") or ""
-            ).strip()
-            ==
-            str(submission_id).strip()
-        ):
-
-            submission = row
-            break
-
-
-    if submission is None:
-        return (
-            "OCEMS submission not found.",
-            404
-        )
-
-
-    # -----------------------------------------
-    # REJECT
-    # -----------------------------------------
-
-    if action == "rejected":
-
-        submission["status"] = "rejected"
-
-        submission["admin_remark"] = (
-            admin_remark
-        )
-
-        submission["approved_at"] = ""
-
-        submission["approved_by"] = ""
-
-
-    # -----------------------------------------
-    # APPROVE
-    # -----------------------------------------
-
-    else:
-
-        stored_filename = os.path.basename(
-            str(
-                submission.get(
-                    "stored_filename"
-                ) or ""
-            ).strip()
-        )
-
-        source_path = os.path.join(
-            OCEMS_UPLOAD_DIR,
-            stored_filename
-        )
-
-
-        if not os.path.isfile(
-            source_path
-        ):
-
-            return (
-                "Uploaded OCEMS file not found.",
-                404
-            )
-
-
-        stp_id = str(
-            submission.get("stp_id")
-            or ""
-        ).strip()
-
-
-        if not stp_id:
-            return (
-                "Invalid STP ID.",
-                400
-            )
-
-
-        # -----------------------------------------
-        # APPROVED FILE BECOMES ACTIVE OCEMS FILE
-        # -----------------------------------------
-
-        os.makedirs(
-            OCEMS_DIR,
-            exist_ok=True
-        )
-
-
-        active_filename = (
-            f"{secure_filename(stp_id)}.xlsx"
-        )
-
-        active_path = os.path.join(
-            OCEMS_DIR,
-            active_filename
-        )
-
-
-        # Convert/copy into the existing active
-        # OCEMS location.
-
-        if source_path.lower().endswith(".xlsx"):
-
-            with store.open(
-                source_path,
-                "rb"
-            ) as source:
-
-                with store.open(
-                    active_path,
-                    "wb"
-                ) as destination:
-
-                    destination.write(
-                        source.read()
-                    )
-
-        else:
-
-            # Convert old .xls files into .xlsx
-            # because load_ocems_data() uses Excel
-            # reading and the active file convention
-            # is <STP_ID>.xlsx.
-
-            excel_df = pd.read_excel(
-                source_path,
-                sheet_name=None
-            )
-
-            with pd.ExcelWriter(
-                active_path,
-                engine="openpyxl"
-            ) as writer:
-
-                for sheet_name, sheet_df in (
-                    excel_df.items()
-                ):
-
-                    sheet_df.to_excel(
-                        writer,
-                        sheet_name=sheet_name,
-                        index=False,
-                        header=False
-                    )
-
-
-        submission["status"] = "approved"
-
-        submission["admin_remark"] = (
-            admin_remark
-        )
-
-        submission["approved_at"] = (
-            datetime.now().isoformat(
-                timespec="seconds"
-            )
-        )
-
-        submission["approved_by"] = (
-            session.get("user_id")
-            or "admin"
-        )
-
-
-    # -----------------------------------------
-    # SAVE CSV
-    # -----------------------------------------
-
-    with store.open(
-        OCEMS_SUBMISSIONS_FILE,
-        "w",
-        newline="",
-        encoding="utf-8"
-    ) as f:
-
-        writer = csv.DictWriter(
-            f,
-            fieldnames=fieldnames
-        )
-
-        writer.writeheader()
-
-        writer.writerows(rows)
-
-
-    return redirect(
-        url_for("admin_dashboard")
-    )
-
 @app.route("/supply_ocems")
 def supply_ocems():
 
@@ -17252,7 +16599,9 @@ def supply_ocems():
 
         ocems_rows=ocems.get("rows", []),
 
-        latest_ocems=ocems.get("latest")
+        latest_ocems=ocems.get("latest"),
+
+        ocems_units=ocems.get("units", {})
     )
 
 # =========================================================
@@ -17284,7 +16633,7 @@ def api_demand_ocems(stp_id):
             "error": "Unknown STP"
         }), 404
 
-    # Reuse the existing OCEMS Excel loader.
+    # Live OCEMS feed (if the plant has connected one).
     ocems = load_ocems_data(stp["stp_id"])
 
     latest = ocems.get("latest") or {}
@@ -17300,10 +16649,11 @@ def api_demand_ocems(stp_id):
         "BOD": latest.get("BOD"),
         "COD": latest.get("COD"),
         "TSS": latest.get("TSS"),
+        "source": ocems.get("source"),
         "permissible_ranges": ocems.get(
             "permissible_ranges", {}
         )
-        
+
     })
 
 @app.route("/api/ocems_summary/<stp_id>")
@@ -17342,6 +16692,7 @@ def api_ocems_summary(stp_id):
         "BOD": latest.get("BOD"),
         "COD": latest.get("COD"),
         "TSS": latest.get("TSS"),
+        "source": ocems.get("source"),
         "permissible_ranges": ocems.get(
             "permissible_ranges",
             {}

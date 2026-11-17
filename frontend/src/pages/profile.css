@@ -31,6 +31,11 @@
 .org-card .mini-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .org-map { min-height: 260px; height: 100%; border-left: 1px solid var(--line); }
 
+.ocems-feed { padding: 14px 20px 18px; display: grid; gap: 12px; }
+.feed-row { display: flex; gap: 12px; align-items: flex-start; padding: 12px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface-2); }
+.feed-main { flex: 1; min-width: 0; display: grid; gap: 3px; }
+.feed-meta { font-size: 12.5px; color: var(--ink-500); overflow-wrap: anywhere; }
+
 .profile-note { display: flex; gap: 8px; align-items: flex-start; font-size: 12.5px; color: var(--ink-500); padding: 0 4px; }
 .profile-note svg { flex: 0 0 14px; margin-top: 2px; }
 

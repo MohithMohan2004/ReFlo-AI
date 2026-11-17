@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>OCEMS · {{ selected_stp.stp_name }} | ReFlow</title>
-    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='brand-mark.svg') }}">
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='brand-mark.svg') }}?v=blocks">
 
     <style>
         * { box-sizing: border-box; }
@@ -212,6 +212,7 @@
                 <span><svg class="i" viewBox="0 0 24 24"><path d="M4 9h16"/><path d="M4 15h16"/><path d="M10 3 8 21"/><path d="M16 3l-2 18"/></svg>{{ stp_id }}</span>
                 {% if company_name %}<span><svg class="i" viewBox="0 0 24 24"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M10 6h4"/><path d="M10 10h4"/><path d="M10 14h4"/></svg>{{ company_name }}</span>{% endif %}
                 {% if station_name %}<span><svg class="i" viewBox="0 0 24 24"><path d="M12 2.7s6 6.5 6 11.3a6 6 0 0 1-12 0c0-4.8 6-11.3 6-11.3Z"/></svg>Station {{ station_name }}</span>{% endif %}
+                {% if ocems_available %}<span title="Readings come from the plant's OCEMS live feed"><svg class="i" viewBox="0 0 24 24"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><path d="M12 20h.01"/></svg>Live API feed</span>{% endif %}
                 <span id="lastReading"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>{{ "No readings yet" if not ocems_available }}</span>
             </div>
         </div>
@@ -296,8 +297,8 @@
                 <path d="M44 70h8l4-10 6 18 4-8h10" fill="none" stroke="#0d9488" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
             <h2>No OCEMS readings yet</h2>
-            <p>Once an OCEMS report for <strong>{{ selected_stp.stp_name }}</strong> is uploaded and approved, its pH, BOD, COD and TSS readings appear here with trends and compliance.</p>
-            <a class="btn-ghost" href="{{ url_for('supply', stp_id=stp_id) }}">Upload from the plant dashboard</a>
+            <p>Once <strong>{{ selected_stp.stp_name }}</strong> connects its OCEMS live feed, its pH, BOD, COD and TSS readings appear here with trends and compliance.</p>
+            <a class="btn-ghost" href="/profile">Connect from your profile</a>
         </section>
 
     {% endif %}

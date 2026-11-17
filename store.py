@@ -460,7 +460,7 @@ CSV_FILES = {
     "database/tanker_registrations.csv": "tanker_registrations",
     "database/tanker_vehicles.csv": "tanker_vehicles",
     "database/tanker_vehicle_documents.csv": "tanker_vehicle_documents",
-    "database/ocems_submissions.csv": "ocems_submissions",
+    "database/ocems_api_connections.csv": "ocems_api_connections",
     "data/stp_pricing.csv": "stp_pricing",
     "database/stp_pricing.csv": "stp_pricing_fallback",
 }
