@@ -372,8 +372,8 @@ TANKER_REGISTRATIONS_FILE = os.path.join(
 
 # =========================================================
 # OCEMS API CONNECTIONS
-# A plant enters its vendor platform URL + API key on the
-# profile page. The key is saved only if a test call returns
+# A plant enters its vendor platform URL + API key (or one
+# data link with the key inside) on the profile page. The key is saved only if a test call returns
 # OCEMS data, and then feeds load_ocems_data() straight away.
 # This is the only source of OCEMS readings.
 # =========================================================
@@ -3340,10 +3340,15 @@ def api_ocems_connection_submit():
 
     if provider not in ocems_api.PROVIDERS:
         return jsonify({"success": False, "error": "Unsupported OCEMS provider."}), 400
-    if not 8 <= len(api_key) <= 512 or any(c.isspace() for c in api_key):
+    if api_key and (not 8 <= len(api_key) <= 512 or any(c.isspace() for c in api_key)):
         return jsonify({"success": False, "error": "Enter the API key exactly as your vendor sent it."}), 400
     try:
-        base_url = ocems_api.normalise_base_url(body.get("base_url"), provider)
+        if api_key:
+            base_url = ocems_api.normalise_base_url(body.get("base_url"), provider)
+        else:
+            # No separate key: the link itself carries it and is stored
+            # (encrypted) as the credential.
+            base_url, api_key = ocems_api.normalise_data_link(body.get("base_url"), provider)
     except ocems_api.OcemsApiError as e:
         return jsonify({"success": False, "error": str(e)}), 400
 

@@ -264,7 +264,7 @@ function OcemsFeedCard() {
   const active = c.data?.active ?? null;
 
   async function disconnect() {
-    if (!window.confirm("Disconnect the live OCEMS feed? Your OCEMS page goes back to the last approved Excel report.")) return;
+    if (!window.confirm("Disconnect the live OCEMS feed? Your OCEMS page will show no readings until you connect again.")) return;
     try {
       await postJSON("/api/ocems/connection/remove", {});
       toast("Live feed disconnected.", "success");
@@ -293,8 +293,8 @@ function OcemsFeedCard() {
               } />
             ) : (
               <Empty icon={Wifi} title="No live feed connected">
-                Ask your OCEMS vendor for the platform URL and API key, then connect them here. ReFlow checks that the key
-                returns data and starts using it straight away. Until then, your approved Excel reports are used.
+                Paste the OCEMS data link from your vendor (or the platform URL and API key). ReFlow checks that it
+                returns readings and starts using it straight away.
               </Empty>
             )}
           </>
@@ -361,18 +361,19 @@ function ConnectDialog({ providers, onClose, onSaved }: {
           </label>
         )}
         {providers.length === 1 && <p className="muted" style={{ margin: 0, fontSize: 13 }}>Vendor: {providers[0].label}</p>}
-        <label className="field"><span className="field-label">Platform URL</span>
+        <label className="field"><span className="field-label">OCEMS data link or platform URL</span>
           <input className="input" required value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)}
-            placeholder={`https://yoursite${suffix}`} inputMode="url" spellCheck={false} />
+            placeholder={`https://yoursite${suffix}/api/data/single?…`} inputMode="url" spellCheck={false} />
+          <span className="field-hint">If your link already contains the key, paste it in full and leave the API key empty.</span>
         </label>
-        <label className="field"><span className="field-label">API key</span>
-          <input className="input" required type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)}
+        <label className="field"><span className="field-label">API key <span className="muted">(optional)</span></span>
+          <input className="input" type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)}
             spellCheck={false} autoComplete="new-password" />
         </label>
         <p className="muted" style={{ margin: 0, fontSize: 12.5, display: "flex", gap: 6 }}>
           <ShieldCheck size={14} style={{ flex: "0 0 14px", marginTop: 2 }} />
-          ReFlow checks that the key returns OCEMS data before saving it. The key is stored encrypted and only its last
-          four characters are ever shown.
+          ReFlow checks that the link returns OCEMS data before saving it. The key (or the link holding it) is stored
+          encrypted and only its last four characters are ever shown.
         </p>
         <div className="row" style={{ justifyContent: "flex-end", gap: 8 }}>
           <button type="button" className="btn btn-ghost" onClick={onClose}>Cancel</button>

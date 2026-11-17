@@ -13,7 +13,12 @@ The CSV holds a timestamp column plus one column per configured parameter
 (label and unit). "--" means a missing value, 0 is a real reading, and a
 period without data returns HTTP 200 with the header only.
 
-API keys are stored encrypted (Fernet). The encryption key comes from
+Some sites hand out a ready-made link with the key already inside it
+(e.g. https://trtdlaita590.tratasoft.com/api/data/single?key=...). Such a
+link is stored as the credential itself (see is_link()) and called as-is,
+without the header.
+
+API keys and links are stored encrypted (Fernet). The encryption key comes from
 OCEMS_KEY_SECRET, or FLASK_SECRET_KEY when that is not set. Changing that
 secret makes stored keys unreadable, so plants would have to resubmit.
 """
@@ -27,7 +32,7 @@ import re
 import threading
 import time
 from datetime import datetime, timedelta, timezone
-from urllib.parse import urlparse
+from urllib.parse import parse_qsl, urlencode, urlparse
 
 import requests
 from cryptography.fernet import Fernet, InvalidToken
@@ -87,7 +92,17 @@ def decrypt_key(token):
 
 def key_hint(api_key):
     api_key = str(api_key or "")
+    if is_link(api_key):
+        # Hint at the key inside the link: its longest query value.
+        parsed = urlparse(api_key)
+        values = [v for _, v in parse_qsl(parsed.query)] or [parsed.path.rsplit("/", 1)[-1]]
+        api_key = max(values, key=len)
     return ("•" * 4 + api_key[-4:]) if len(api_key) > 4 else "•" * 4
+
+
+def is_link(credential):
+    """True when the stored credential is a full data link (key inside)."""
+    return str(credential or "").startswith("https://")
 
 
 # ---------------------------------------------------------------------------
@@ -123,17 +138,47 @@ def normalise_base_url(raw, provider="trata"):
     return f"https://{host}"
 
 
+def normalise_data_link(raw, provider="trata"):
+    """Check a full data link (key inside) and return (base_url, link)."""
+    raw = str(raw or "").strip()
+    if not raw:
+        raise OcemsApiError("Paste the OCEMS data link from your vendor.")
+    if "://" not in raw:
+        raw = "https://" + raw
+    if len(raw) > 2048 or any(c.isspace() for c in raw):
+        raise OcemsApiError("Paste the data link exactly as your vendor sent it.")
+    base_url = normalise_base_url(raw, provider)
+    parsed = urlparse(raw)
+    if not parsed.query and parsed.path in ("", "/"):
+        raise OcemsApiError(
+            "This link has no key in it. Paste the full data link, or enter the API key as well."
+        )
+    link = base_url + (parsed.path or "/") + (("?" + parsed.query) if parsed.query else "")
+    return base_url, link
+
+
 # ---------------------------------------------------------------------------
 # Vendor calls
 # ---------------------------------------------------------------------------
 
 def _get_csv(base_url, api_key, path, params=None, provider="trata"):
+    """GET base_url + path. With a data link as api_key, the link's own
+    query (which carries the key) is sent instead of the key header, and
+    path=None calls the link exactly as given."""
     spec = PROVIDERS[provider]
+    headers = {"Accept": "text/csv"}
+    if is_link(api_key):
+        link = urlparse(api_key)
+        url = base_url + (link.path if path is None else path)
+        params = urlencode(parse_qsl(link.query, keep_blank_values=True) + list((params or {}).items()))
+    else:
+        url = base_url + path
+        headers[spec["key_header"]] = api_key
     try:
         res = requests.get(
-            base_url + path,
+            url,
             params=params,
-            headers={spec["key_header"]: api_key, "Accept": "text/csv"},
+            headers=headers,
             timeout=REQUEST_TIMEOUT,
             allow_redirects=False,
         )
@@ -164,7 +209,8 @@ def _get_csv(base_url, api_key, path, params=None, provider="trata"):
 def test_connection(base_url, api_key, provider="trata"):
     """Fetch the latest row. Returns (ok, message)."""
     try:
-        text = _get_csv(base_url, api_key, "/api/data/single", provider=provider)
+        path = None if is_link(api_key) else "/api/data/single"
+        text = _get_csv(base_url, api_key, path, provider=provider)
         parsed = parse_csv(text)
     except OcemsApiError as e:
         return False, str(e)
@@ -179,6 +225,20 @@ def test_connection(base_url, api_key, provider="trata"):
 
 
 def fetch_history(base_url, api_key, provider="trata", days=HISTORY_DAYS):
+    if is_link(api_key):
+        # Try the range endpoint with the link's key; if the vendor only
+        # allows the link itself, fall back to it (latest reading only).
+        try:
+            parsed = _fetch_range(base_url, api_key, provider, days)
+            if parsed["rows"]:
+                return parsed
+        except OcemsApiError:
+            pass
+        return parse_csv(_get_csv(base_url, api_key, None, provider=provider))
+    return _fetch_range(base_url, api_key, provider, days)
+
+
+def _fetch_range(base_url, api_key, provider, days):
     today = datetime.now(IST).date()
     text = _get_csv(
         base_url,
