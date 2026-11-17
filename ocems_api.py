@@ -400,7 +400,7 @@ def refresh_async(cache_key, base_url, api_key, provider="trata"):
     """Start a background refresh unless one is already running."""
     with _cache_lock:
         entry = _cache.setdefault(cache_key, _new_entry())
-        if entry["thread"] is not None:
+        if entry["thread"] is not None and entry["thread"].is_alive():
             return entry["thread"]
         thread = threading.Thread(
             target=_refresh, args=(cache_key, base_url, api_key, provider),
@@ -446,20 +446,57 @@ def clear_cache(cache_key=None):
             _cache.pop(cache_key, None)
 
 
+_warmer = {"config": None, "pid": None, "forked": False}
+
+
 def start_warmer(list_connections, interval=CACHE_TTL):
     """Daemon thread that refreshes every active feed each `interval`
     seconds, so OCEMS pages rarely have to wait for the vendor.
-    list_connections() returns [(cache_key, base_url, api_key, provider)]."""
+    list_connections() returns [(cache_key, base_url, api_key, provider)].
+
+    Fork-safe: gunicorn imports the app in its master process and then
+    forks the workers that serve requests. Threads don't survive a fork,
+    so each worker resets the cache and starts its own warmer, and the
+    master's warmer stops (see _after_fork_*)."""
+    _warmer["config"] = (list_connections, interval)
+    _launch_warmer()
+
+
+def _launch_warmer():
+    list_connections, interval = _warmer["config"]
+    pid = os.getpid()
+    _warmer["pid"] = pid
+
     def loop():
-        while True:
+        while _warmer["pid"] == pid and not _warmer["forked"]:
             try:
                 for args in list_connections():
                     refresh_async(*args)
             except Exception as e:  # never let the warmer die
                 _log(f"warmer error: {type(e).__name__}: {e}")
             time.sleep(interval)
+        _log(f"warmer in pid {pid} stopped (a worker process took over)")
+
     threading.Thread(target=loop, name="ocems-warmer", daemon=True).start()
-    _log(f"warmer started (pid {os.getpid()}, every {interval} s)")
+    _log(f"warmer started (pid {pid}, every {interval} s)")
+
+
+def _after_fork_in_parent():
+    # The forked worker serves requests and runs its own warmer.
+    _warmer["forked"] = True
+
+
+def _after_fork_in_child():
+    global _cache_lock
+    _cache_lock = threading.Lock()   # may have been held by a parent thread
+    _cache.clear()                   # threads recorded here don't exist in the child
+    _warmer["forked"] = False
+    if _warmer["config"] is not None:
+        _launch_warmer()
+
+
+if hasattr(os, "register_at_fork"):
+    os.register_at_fork(after_in_parent=_after_fork_in_parent, after_in_child=_after_fork_in_child)
 
 
 # ---------------------------------------------------------------------------
