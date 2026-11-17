@@ -51,3 +51,6 @@
   .profile-facts > div { border-left: 0 !important; border-top: 1px solid var(--line); }
   .profile-facts > div:first-child { border-top: 0; }
 }
+
+.plant-edit-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 520px) { .plant-edit-grid { grid-template-columns: 1fr; } }

@@ -50,12 +50,22 @@ PROVIDERS = {
     },
 }
 
-REQUEST_TIMEOUT = 12          # seconds per vendor call
+# Trata is slow: the latest row takes 5-25 s and a two-day range ~30 s
+# (one row per minute), so history is fetched in the background and
+# pages are served from the last good copy (see cached_history()).
+REQUEST_TIMEOUT = 40          # seconds for the latest-row call
+RANGE_TIMEOUT = 150           # seconds for the history call
 HISTORY_DAYS = 7              # readings shown on the OCEMS pages
-CACHE_TTL = 300               # cache good responses for 5 minutes
-ERROR_TTL = 60                # and failures for 1 minute
+HISTORY_STEP_MINUTES = 15     # keep one row per 15 minutes (+ the newest)
+# New readings land every minute, so the latest row is polled every
+# minute and merged into the cached history; the slow full range is
+# re-downloaded only every HISTORY_TTL to fill gaps.
+CACHE_TTL = 60                # poll the latest row every minute
+HISTORY_TTL = 1800            # re-download the full history every 30 minutes
+ERROR_TTL = 60                # retry a failed call after 1 minute
+FIRST_LOAD_WAIT = 20          # seconds a page waits when nothing is cached
 
-_cache = {}
+_cache = {}                   # key -> {"data", "error", "fresh_until", "history_until", "thread"}
 _cache_lock = threading.Lock()
 
 
@@ -91,11 +101,12 @@ def decrypt_key(token):
 
 
 def key_hint(api_key):
+    """Masked hint of the key; "" for a data link that carries no key."""
     api_key = str(api_key or "")
     if is_link(api_key):
-        # Hint at the key inside the link: its longest query value.
-        parsed = urlparse(api_key)
-        values = [v for _, v in parse_qsl(parsed.query)] or [parsed.path.rsplit("/", 1)[-1]]
+        values = [v for _, v in parse_qsl(urlparse(api_key).query)]
+        if not values:
+            return ""
         api_key = max(values, key=len)
     return ("•" * 4 + api_key[-4:]) if len(api_key) > 4 else "•" * 4
 
@@ -161,7 +172,7 @@ def normalise_data_link(raw, provider="trata"):
 # Vendor calls
 # ---------------------------------------------------------------------------
 
-def _get_csv(base_url, api_key, path, params=None, provider="trata"):
+def _get_csv(base_url, api_key, path, params=None, provider="trata", timeout=REQUEST_TIMEOUT):
     """GET base_url + path. With a data link as api_key, the link's own
     query (which carries the key) is sent instead of the key header, and
     path=None calls the link exactly as given."""
@@ -179,7 +190,7 @@ def _get_csv(base_url, api_key, path, params=None, provider="trata"):
             url,
             params=params,
             headers=headers,
-            timeout=REQUEST_TIMEOUT,
+            timeout=timeout,
             allow_redirects=False,
         )
     except requests.RequestException:
@@ -224,6 +235,11 @@ def test_connection(base_url, api_key, provider="trata"):
     return True, f"Connected. Latest reading {latest['timestamp']} ({', '.join(parsed['parameters'])})."
 
 
+def fetch_latest(base_url, api_key, provider="trata"):
+    path = None if is_link(api_key) else "/api/data/single"
+    return parse_csv(_get_csv(base_url, api_key, path, provider=provider))
+
+
 def fetch_history(base_url, api_key, provider="trata", days=HISTORY_DAYS):
     if is_link(api_key):
         # Try the range endpoint with the link's key; if the vendor only
@@ -234,8 +250,20 @@ def fetch_history(base_url, api_key, provider="trata", days=HISTORY_DAYS):
                 return parsed
         except OcemsApiError:
             pass
-        return parse_csv(_get_csv(base_url, api_key, None, provider=provider))
+        return fetch_latest(base_url, api_key, provider)
     return _fetch_range(base_url, api_key, provider, days)
+
+
+def thin_rows(rows, step=HISTORY_STEP_MINUTES):
+    """Keep the newest row plus one row per `step` minutes (newest first)."""
+    if not rows:
+        return rows
+    kept = [rows[0]]
+    for row in rows[1:]:
+        minute = int(row["timestamp"][14:16] or 0)
+        if minute % step == 0:
+            kept.append(row)
+    return kept
 
 
 def _fetch_range(base_url, api_key, provider, days):
@@ -249,33 +277,120 @@ def _fetch_range(base_url, api_key, provider, days):
             "to": today.isoformat(),
         },
         provider=provider,
+        timeout=RANGE_TIMEOUT,
     )
-    return parse_csv(text)
+    parsed = parse_csv(text)
+    parsed["rows"] = thin_rows(parsed["rows"])
+    return parsed
+
+
+def _new_entry():
+    return {"data": None, "error": None, "fresh_until": 0, "history_until": 0, "thread": None}
+
+
+def _store(cache_key, data=None, error=None, ttl=CACHE_TTL, history=False):
+    with _cache_lock:
+        entry = _cache.setdefault(cache_key, _new_entry())
+        if data is not None:
+            entry["data"] = data
+        entry["error"] = error
+        entry["fresh_until"] = time.monotonic() + ttl
+        if history:
+            entry["history_until"] = time.monotonic() + HISTORY_TTL
+
+
+def merge_latest(history, latest):
+    """Put newer rows from a latest-row response on top of the cached
+    history (newest first), keeping the 15-minute thinning."""
+    if not history or not history.get("rows"):
+        return latest
+    newest = history["rows"][0]["timestamp"]
+    fresh = [r for r in latest["rows"] if r["timestamp"] > newest]
+    if not fresh:
+        return history
+    return {
+        "parameters": latest["parameters"] or history["parameters"],
+        "units": {**history.get("units", {}), **latest.get("units", {})},
+        "rows": thin_rows(fresh + history["rows"]),
+    }
+
+
+def _refresh(cache_key, base_url, api_key, provider):
+    """Background job. Normally one quick latest-row call, merged into the
+    cache; the full history only when missing or older than HISTORY_TTL."""
+    try:
+        with _cache_lock:
+            entry = _cache.get(cache_key) or {}
+            data = entry.get("data")
+            need_history = entry.get("history_until", 0) <= time.monotonic()
+
+        if data is None or not need_history:
+            try:
+                latest = fetch_latest(base_url, api_key, provider)
+                if latest["rows"]:
+                    data = merge_latest(data, latest)
+                    _store(cache_key, data=data, ttl=0 if need_history else CACHE_TTL)
+                elif not need_history:
+                    _store(cache_key)
+            except OcemsApiError as e:
+                if not need_history:
+                    _store(cache_key, error=e, ttl=ERROR_TTL)
+
+        if need_history:
+            try:
+                history = fetch_history(base_url, api_key, provider)
+                with _cache_lock:
+                    current = (_cache.get(cache_key) or {}).get("data")
+                # Keep any newer row the latest call found meanwhile.
+                _store(cache_key, data=merge_latest(history, current) if current else history, history=True)
+            except OcemsApiError as e:
+                _store(cache_key, error=e, ttl=ERROR_TTL)
+    finally:
+        with _cache_lock:
+            if cache_key in _cache:
+                _cache[cache_key]["thread"] = None
+
+
+def refresh_async(cache_key, base_url, api_key, provider="trata"):
+    """Start a background refresh unless one is already running."""
+    with _cache_lock:
+        entry = _cache.setdefault(cache_key, _new_entry())
+        if entry["thread"] is not None:
+            return entry["thread"]
+        thread = threading.Thread(
+            target=_refresh, args=(cache_key, base_url, api_key, provider),
+            name=f"ocems-{cache_key}", daemon=True,
+        )
+        entry["thread"] = thread
+    thread.start()
+    return thread
 
 
 def cached_history(cache_key, base_url, api_key, provider="trata"):
-    """fetch_history() with a short in-process cache, so page views don't
-    each call the vendor. Raises OcemsApiError (also cached briefly)."""
-    now = time.monotonic()
+    """Readings for a page view without waiting on the slow vendor:
+    returns the last good data (refreshing it in the background when it
+    is older than CACHE_TTL). With nothing cached yet it waits up to
+    FIRST_LOAD_WAIT seconds. Raises OcemsApiError when there is no data."""
     with _cache_lock:
-        hit = _cache.get(cache_key)
-        if hit and hit[0] > now:
-            if isinstance(hit[1], OcemsApiError):
-                raise hit[1]
-            return hit[1]
+        entry = _cache.get(cache_key) or {}
+        data, error = entry.get("data"), entry.get("error")
+        stale = entry.get("fresh_until", 0) <= time.monotonic()
 
-    try:
-        result = fetch_history(base_url, api_key, provider)
-        entry = (now + CACHE_TTL, result)
-    except OcemsApiError as e:
-        entry = (now + ERROR_TTL, e)
+    if stale:
+        thread = refresh_async(cache_key, base_url, api_key, provider)
+        if data is None:
+            deadline = time.monotonic() + FIRST_LOAD_WAIT
+            while time.monotonic() < deadline:
+                thread.join(0.5)
+                with _cache_lock:
+                    entry = _cache.get(cache_key) or {}
+                    data, error = entry.get("data"), entry.get("error")
+                if data is not None or not thread.is_alive():
+                    break
 
-    with _cache_lock:
-        _cache[cache_key] = entry
-
-    if isinstance(entry[1], OcemsApiError):
-        raise entry[1]
-    return entry[1]
+    if data is not None:
+        return data
+    raise error or OcemsApiError("Still loading readings from the OCEMS platform. Refresh in a minute.")
 
 
 def clear_cache(cache_key=None):
@@ -284,6 +399,21 @@ def clear_cache(cache_key=None):
             _cache.clear()
         else:
             _cache.pop(cache_key, None)
+
+
+def start_warmer(list_connections, interval=CACHE_TTL):
+    """Daemon thread that refreshes every active feed each `interval`
+    seconds, so OCEMS pages rarely have to wait for the vendor.
+    list_connections() returns [(cache_key, base_url, api_key, provider)]."""
+    def loop():
+        while True:
+            try:
+                for args in list_connections():
+                    refresh_async(*args)
+            except Exception as e:  # never let the warmer die
+                print("OCEMS warmer:", e)
+            time.sleep(interval)
+    threading.Thread(target=loop, name="ocems-warmer", daemon=True).start()
 
 
 # ---------------------------------------------------------------------------
@@ -299,6 +429,10 @@ CANONICAL = [
     (re.compile(r"\bcod\b", re.I), "COD"),
     (re.compile(r"\btss\b|total suspended", re.I), "TSS"),
 ]
+
+# Units for the CPCB parameters. Trata sites sometimes label every
+# column with the flow unit (e.g. "COD (m³/hr)"), so these win.
+CANONICAL_UNITS = {"COD": "mg/L", "BOD": "mg/L", "TSS": "mg/L", "pH": ""}
 
 TIME_WORDS = re.compile(r"time|date", re.I)
 
@@ -428,6 +562,13 @@ def parse_csv(text):
         rows.append(entry)
 
     rows.sort(key=lambda r: r["timestamp"], reverse=True)
+
+    for name, unit in CANONICAL_UNITS.items():
+        if any(n == name for _, n in columns):
+            if unit:
+                units[name] = unit
+            else:
+                units.pop(name, None)
 
     return {
         "parameters": [name for _, name in columns],
