@@ -396,6 +396,15 @@
         var name = "ocems.csv";
         var m = /filename="([^"]+)"/.exec(res.headers.get("Content-Disposition") || "");
         if (m) name = m[1];
+        // Inside the Android app the WebView ignores <a download>; the
+        // native bridge (MainActivity.FileSaver) saves the file instead.
+        if (window.ReFlowFiles && window.ReFlowFiles.saveText) {
+            return res.text().then(function (text) {
+                var result = window.ReFlowFiles.saveText(name, "text/csv", text);
+                if (result === "error") throw new Error("Couldn't save the file on this phone.");
+                return result === "saved" ? "Saved to your Downloads folder." : "Choose where to save the file.";
+            });
+        }
         return res.blob().then(function (blob) {
             var a = document.createElement("a");
             a.href = URL.createObjectURL(blob);
@@ -438,8 +447,8 @@
         }).then(function (res) {
             if (!res.ok) return errorOf(res).then(function (msg) { throw new Error(msg); });
             return res.json().then(function (d) { return poll(d.job_id, Date.now()); });
-        }).then(function () {
-            say("Downloaded.");
+        }).then(function (message) {
+            say(message || "Downloaded.");
             setTimeout(function () { if (!busy) dialog.close(); }, 900);
         }).catch(function (err) {
             say(err && err.message ? err.message : "The download failed. Try again.", true);
