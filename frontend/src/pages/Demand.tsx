@@ -19,11 +19,11 @@ import { useAsync } from "../lib/useAsync";
 import { useToast } from "../lib/toast";
 import { num, when } from "../lib/format";
 import type { OcemsReading, Stp } from "../lib/types";
+import { GRADES } from "../lib/grades";
 import "./demand.css";
 
 const MIN_KLD = 5;
 const AVG_SPEED_KMH = 28; // matches the previous ETA model
-const QUALITIES = ["Platinum", "Gold", "Silver", "General"];
 const TYPES = ["Treated", "Fresh", "General"];
 
 interface Point { lat: number; lon: number; label: string }
@@ -291,7 +291,7 @@ export default function Demand() {
             <label className="field-label" htmlFor="quality">Quality grade</label>
             <select id="quality" className="select" value={quality} onChange={(e) => { setQuality(e.target.value); resetResult(); }}>
               <option value="">Any grade</option>
-              {QUALITIES.map((q) => <option key={q}>{q}</option>)}
+              {GRADES.map((q) => <option key={q}>{q}</option>)}
             </select>
           </div>
           <div className="field">

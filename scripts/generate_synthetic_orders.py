@@ -165,7 +165,7 @@ def generate_orders(count):
             "stp_id": stp_id,
             "stp_name": stp_name,
             "quantity_kld": random_quantity(),
-            "quality": random.choice(["Gold", "Silver", "Bronze"]),
+            "quality": random.choice(["Platinum", "Gold", "Silver", "General"]),
             "water_type": random.choice(
                 ["Domestic", "Industrial", "Construction", "Gardening"]
             ),
