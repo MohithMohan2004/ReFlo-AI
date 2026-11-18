@@ -1,0 +1,23 @@
+services:
+  web:
+    build:
+      context: .
+      # Use https://registry.yarnpkg.com/ on networks that block registry.npmjs.org
+      args:
+        NPM_REGISTRY: ${NPM_REGISTRY:-https://registry.npmjs.org/}
+    image: reflow:latest
+    ports:
+      - "${PORT:-10000}:10000"
+    env_file: .env
+    environment:
+      PORT: 10000
+      # Juno chatbot: reach Ollama running on the host machine
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434/v1}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      # Keep CSV/JSON data and uploads on the host (used when DATABASE_URL is empty)
+      - ./database:/app/database
+      - ./data:/app/data
+      - ./uploads:/app/uploads
+    restart: unless-stopped
