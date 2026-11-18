@@ -17,6 +17,7 @@ import { useAsync } from "../lib/useAsync";
 import { initials, num, when } from "../lib/format";
 import type { Stp } from "../lib/types";
 import { ThemeSwitch } from "../lib/theme";
+import { GRADES, isGrade } from "../lib/grades";
 import "./profile.css";
 
 interface ProfileData {
@@ -211,7 +212,6 @@ function PlantCard({ plant, onSaved }: { plant: Stp | null; onSaved: () => void 
   );
 }
 
-const GRADES = ["General", "Bronze", "Silver", "Gold"];
 
 function PlantDialog({ plant, onClose, onSaved }: { plant: Stp; onClose: () => void; onSaved: () => void }) {
   const toast = useToast();
@@ -219,7 +219,7 @@ function PlantDialog({ plant, onClose, onSaved }: { plant: Stp; onClose: () => v
   const [f, setF] = useState({
     stp_name: plant.stp_name ?? "",
     technology: plant.technology && plant.technology !== "Not Specified" ? plant.technology : "",
-    quality_grade: GRADES.includes(plant.quality_grade ?? "") ? plant.quality_grade! : "General",
+    quality_grade: isGrade(plant.quality_grade) ? plant.quality_grade : "General",
     total_capacity_kld: kld(plant.total_capacity_mld),
     current_load_kld: kld(plant.current_load_mld ?? 0),
     treatment_cost_per_kl: plant.treatment_cost_per_kl != null ? String(plant.treatment_cost_per_kl) : "",

@@ -152,6 +152,32 @@
         .empty h2 { margin: 0; font-size: 20px; }
         .empty p { margin: 0; max-width: 46ch; color: var(--muted); font-size: 14px; line-height: 1.55; }
 
+        /* ---------- Download dialog ---------- */
+        .dl { width: min(460px, calc(100vw - 32px)); padding: 0; border: 1px solid var(--line); border-radius: 18px; background: var(--surface); color: var(--ink); box-shadow: var(--shadow-pop); }
+        .dl::backdrop { background: rgba(8, 15, 28, .45); }
+        .dl form { display: grid; gap: 16px; padding: 22px; }
+        .dl h2 { margin: 0; font-size: 18px; letter-spacing: -0.01em; }
+        .dl .lede { margin: 4px 0 0; font-size: 13px; color: var(--muted); line-height: 1.5; }
+        .dl fieldset { margin: 0; padding: 0; border: 0; display: grid; gap: 8px; }
+        .dl legend { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+        .opt { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 12px; align-items: start; padding: 12px 14px; border: 1.5px solid var(--line); border-radius: 13px; cursor: pointer; transition: border-color .14s, background .14s; }
+        .opt:hover { border-color: var(--line-strong); }
+        .opt:has(input:checked) { border-color: var(--brand); background: var(--brand-tint); }
+        .opt input { grid-row: span 2; margin: 2px 0 0; accent-color: var(--brand); }
+        .opt b { font-size: 14px; }
+        .opt span { font-size: 12.5px; color: var(--muted); }
+        .dates { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .dates[hidden] { display: none; }
+        .dates label { display: grid; gap: 5px; font-size: 12.5px; font-weight: 600; color: var(--ink-2); }
+        .dates input { height: 38px; padding: 0 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--ink); font: inherit; font-size: 13.5px; color-scheme: light dark; }
+        .dates input:focus { outline: 2px solid var(--brand-ring); border-color: var(--brand); }
+        .dl-status { min-height: 18px; margin: 0; font-size: 13px; color: var(--muted); }
+        .dl-status.bad { color: var(--bad); }
+        .dl-actions { display: flex; justify-content: flex-end; gap: 8px; }
+        .btn-primary { display: inline-flex; align-items: center; gap: 7px; height: 36px; padding: 0 15px; border: 0; border-radius: 10px; background: var(--brand); color: #fff; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+        .btn-primary:hover { background: var(--brand-hover); }
+        .btn-primary:disabled { opacity: .6; cursor: progress; }
+
         @media (max-width: 1080px) {
             .params { grid-template-columns: repeat(2, minmax(0, 1fr)); }
             .grid-main { grid-template-columns: minmax(0, 1fr); }
@@ -184,8 +210,8 @@
         <span class="wordmark">Re<span>Flow</span></span>
     </a>
     <div class="bar-actions">
-        {% if ocems_available %}
-            <button type="button" class="btn-ghost" id="downloadCsv">
+        {% if ocems_connected %}
+            <button type="button" class="btn-ghost" id="downloadCsv" aria-haspopup="dialog">
                 <svg class="i" viewBox="0 0 24 24"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
                 <span class="label-text">Download CSV</span>
             </button>
@@ -304,6 +330,127 @@
     {% endif %}
 
 </main>
+
+{% if ocems_connected %}
+<dialog class="dl" id="dlDialog" aria-labelledby="dlTitle">
+    <form method="dialog" id="dlForm" novalidate>
+        <div>
+            <h2 id="dlTitle">Download OCEMS data</h2>
+            <p class="lede">Raw readings straight from your OCEMS platform, as a CSV file.</p>
+        </div>
+        <fieldset>
+            <legend>What to download</legend>
+            <label class="opt"><input type="radio" name="kind" value="single" checked><b>Latest reading</b><span>The newest saved row.</span></label>
+            <label class="opt"><input type="radio" name="kind" value="monthly"><b>Last 30 days</b><span>Every reading from the rolling 30 days up to now.</span></label>
+            <label class="opt"><input type="radio" name="kind" value="range"><b>Custom range</b><span>Every reading between two dates, both included (up to 92 days).</span></label>
+        </fieldset>
+        <div class="dates" id="dlDates" hidden>
+            <label>From<input type="date" name="from" id="dlFrom"></label>
+            <label>To<input type="date" name="to" id="dlTo"></label>
+        </div>
+        <p class="dl-status" id="dlStatus" role="status" aria-live="polite"></p>
+        <div class="dl-actions">
+            <button type="button" class="btn-ghost" id="dlCancel">Cancel</button>
+            <button type="submit" class="btn-primary" id="dlGo">
+                <svg class="i" viewBox="0 0 24 24"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>Download
+            </button>
+        </div>
+    </form>
+</dialog>
+
+<script>
+(function () {
+    "use strict";
+    var dialog = document.getElementById("dlDialog");
+    var form = document.getElementById("dlForm");
+    var dates = document.getElementById("dlDates");
+    var from = document.getElementById("dlFrom");
+    var to = document.getElementById("dlTo");
+    var status = document.getElementById("dlStatus");
+    var go = document.getElementById("dlGo");
+    var busy = false;
+
+    // Dates are in IST, like the vendor's data.
+    function istDate(offsetDays) {
+        var d = new Date(Date.now() + 5.5 * 3600e3 + (offsetDays || 0) * 86400e3);
+        return d.toISOString().slice(0, 10);
+    }
+    var today = istDate(0);
+    from.max = today; to.max = today;
+    from.value = istDate(-6); to.value = today;
+
+    function say(text, bad) { status.textContent = text; status.className = "dl-status" + (bad ? " bad" : ""); }
+    function kind() { return form.querySelector("input[name=kind]:checked").value; }
+
+    form.addEventListener("change", function () { dates.hidden = kind() !== "range"; if (!busy) say(""); });
+    document.getElementById("downloadCsv").addEventListener("click", function () { say(""); dialog.showModal(); });
+    document.getElementById("dlCancel").addEventListener("click", function () { dialog.close(); });
+    dialog.addEventListener("cancel", function (e) { if (busy) e.preventDefault(); });
+
+    function errorOf(res) {
+        return res.json().then(function (d) { return d.error || "The download failed. Try again."; },
+                               function () { return "The download failed. Try again."; });
+    }
+
+    function save(res) {
+        var name = "ocems.csv";
+        var m = /filename="([^"]+)"/.exec(res.headers.get("Content-Disposition") || "");
+        if (m) name = m[1];
+        return res.blob().then(function (blob) {
+            var a = document.createElement("a");
+            a.href = URL.createObjectURL(blob);
+            a.download = name;
+            document.body.appendChild(a); a.click(); a.remove();
+            setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
+        });
+    }
+
+    function poll(jobId, started) {
+        return new Promise(function (r) { setTimeout(r, 2500); }).then(function () {
+            return fetch("/api/ocems/export/" + encodeURIComponent(jobId), { credentials: "same-origin", cache: "no-store" });
+        }).then(function (res) {
+            if (res.status === 202) {
+                var secs = Math.round((Date.now() - started) / 1000);
+                say("Fetching from your OCEMS platform… " + secs + " s. Large ranges can take a few minutes; keep this page open.");
+                return poll(jobId, started);
+            }
+            if (!res.ok) return errorOf(res).then(function (msg) { throw new Error(msg); });
+            return save(res);
+        });
+    }
+
+    form.addEventListener("submit", function (e) {
+        e.preventDefault();
+        if (busy) return;
+        var body = { kind: kind() };
+        if (body.kind === "range") {
+            if (!from.value || !to.value) return say("Pick both a start and an end date.", true);
+            if (from.value > to.value) return say("The start date must be on or before the end date.", true);
+            body.from = from.value; body.to = to.value;
+        }
+        busy = true; go.disabled = true;
+        window.__ocemsExportBusy = true;
+        say("Asking your OCEMS platform for the data…");
+        fetch("/api/ocems/export", {
+            method: "POST", credentials: "same-origin",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body)
+        }).then(function (res) {
+            if (!res.ok) return errorOf(res).then(function (msg) { throw new Error(msg); });
+            return res.json().then(function (d) { return poll(d.job_id, Date.now()); });
+        }).then(function () {
+            say("Downloaded.");
+            setTimeout(function () { if (!busy) dialog.close(); }, 900);
+        }).catch(function (err) {
+            say(err && err.message ? err.message : "The download failed. Try again.", true);
+        }).then(function () {
+            busy = false; go.disabled = false;
+            window.__ocemsExportBusy = false;
+        });
+    });
+})();
+</script>
+{% endif %}
 
 {% if ocems_available %}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
@@ -628,19 +775,6 @@
     });
     drawTable();
 
-    // ---------- CSV export ----------
-    document.getElementById("downloadCsv").addEventListener("click", function () {
-        var lines = [["timestamp"].concat(PARAMS).join(",")].concat(rows.map(function (r) {
-            return [r.ts].concat(PARAMS.map(function (p) { return r.v[p] === null ? "" : r.v[p]; })).join(",");
-        }));
-        var blob = new Blob([lines.join("\n")], { type: "text/csv" });
-        var a = document.createElement("a");
-        a.href = URL.createObjectURL(blob);
-        a.download = "ocems-" + STP + ".csv";
-        document.body.appendChild(a); a.click(); a.remove();
-        setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
-    });
-
     // ---------- Live updates ----------
     // The server polls the vendor every minute; check it for a newer
     // reading and reload (keeping the scroll position) when one arrives.
@@ -653,6 +787,8 @@
     var shown = ROWS.length ? ROWS[0].timestamp : null;
     function checkForNewReading() {
         if (document.hidden) return;
+        var dl = document.getElementById("dlDialog");
+        if ((dl && dl.open) || window.__ocemsExportBusy) return;   // a download is being set up
         var el = document.activeElement;
         if (el && /^(INPUT|SELECT|TEXTAREA)$/.test(el.tagName)) return;   // don't interrupt the user
         fetch("/api/ocems_summary/" + encodeURIComponent(STP), { credentials: "same-origin", cache: "no-store" })

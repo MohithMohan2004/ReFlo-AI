@@ -3,9 +3,9 @@ import { ArrowRight, Factory, Gauge, ShieldCheck } from "lucide-react";
 import { LocationPicker, type PickedPoint } from "../../components/LocationPicker";
 import { Notice, Spinner } from "../../components/ui";
 import { submitForm } from "../../lib/api";
+import { GRADES } from "../../lib/grades";
 import { Checklist, digits, EMAIL_RE, Field, PHONE_RE, RegisterHero, RegisterShell, Section, SuccessView } from "./shared";
 
-const GRADES = ["General", "Bronze", "Silver", "Gold"];
 
 export default function StpRegister() {
   const [f, setF] = useState({

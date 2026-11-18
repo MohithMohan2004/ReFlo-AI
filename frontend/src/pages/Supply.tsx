@@ -23,6 +23,7 @@ import { num, when } from "../lib/format";
 import { applyFilter, bucketOf, BUCKET_COLOR, filterOptions, type OrderFilter } from "../lib/orders";
 import { toPoint, useRoute } from "../lib/route";
 import type { OcemsReading, Stp } from "../lib/types";
+import { GRADES } from "../lib/grades";
 import "./supply.css";
 
 interface DemandRow {
@@ -49,7 +50,6 @@ interface Overview {
 }
 type Focus = { kind: "order"; id: string } | { kind: "transfer"; id: string } | null;
 
-const QUALITIES = ["Platinum", "Gold", "Silver", "General"];
 
 export default function Supply() {
   const toast = useToast();
@@ -568,7 +568,7 @@ function RequestDialog({ me, stps, onClose, onSaved }: { me: Stp; stps: Stp[]; o
             <span className="field-label">Quality grade</span>
             <select className="select" required value={quality} onChange={(e) => setQuality(e.target.value)}>
               <option value="">Choose…</option>
-              {QUALITIES.map((q) => <option key={q}>{q}</option>)}
+              {GRADES.map((q) => <option key={q}>{q}</option>)}
             </select>
           </label>
         </div>

@@ -21,7 +21,6 @@ const GRADES: { name: string; color: string }[] = [
   { name: "Platinum", color: "#7c3aed" },
   { name: "Gold", color: "#d97706" },
   { name: "Silver", color: "#64748b" },
-  { name: "Bronze", color: "#b45309" },
   { name: "General", color: "#0d9488" },
 ];
 const gradeColor = (g?: string) => GRADES.find((x) => x.name === g)?.color ?? "#0d9488";

@@ -3311,7 +3311,9 @@ def api_profile():
     return jsonify(profile_data)
 
 
-STP_GRADES = {"General", "Bronze", "Silver", "Gold"}
+# Water quality grades, best first. Plants, orders and the frontend
+# (frontend/src/lib/grades.ts) all use exactly these names.
+STP_GRADES = ("Platinum", "Gold", "Silver", "General")
 
 
 @app.route("/api/stp/details", methods=["POST"])
@@ -3501,6 +3503,70 @@ def api_ocems_connection_remove():
         save_ocems_api_connections(rows)
 
     return jsonify({"success": True})
+
+
+@app.route("/api/ocems/export", methods=["POST"])
+def api_ocems_export_start():
+    """Start a CSV download of the plant's raw OCEMS data from the vendor:
+    the latest reading, the last 30 days, or a date range."""
+    if not session.get("user_id"):
+        return jsonify({"success": False, "error": "Login required"}), 401
+    stp_id = _session_stp_id()
+    if not stp_id:
+        return jsonify({"success": False, "error": "Only plant accounts can download OCEMS data."}), 403
+
+    connection = get_active_ocems_api(stp_id)
+    if not connection:
+        return jsonify({"success": False, "error": "Connect your OCEMS live feed from your profile first."}), 400
+
+    body = request.get_json(silent=True) or {}
+    kind = str(body.get("kind") or "").strip().lower()
+    try:
+        params = ocems_api.export_params(kind, body.get("from"), body.get("to"))
+        api_key = ocems_api.decrypt_key(connection.get("api_key_enc"))
+    except ocems_api.OcemsApiError as e:
+        return jsonify({"success": False, "error": str(e)}), 400
+
+    stamp = datetime.now(ocems_api.IST)
+    suffix = {
+        "single": "latest-" + stamp.strftime("%Y-%m-%d-%H%M"),
+        "monthly": "30-days-to-" + stamp.strftime("%Y-%m-%d"),
+        "range": f"{params.get('from')}-to-{params.get('to')}",
+    }[kind]
+    safe_id = re.sub(r"[^A-Za-z0-9_-]", "", stp_id) or "plant"
+    try:
+        job_id = ocems_api.start_export(
+            stp_id,
+            connection["base_url"],
+            api_key,
+            kind,
+            params,
+            f"ocems-{safe_id}-{suffix}.csv",
+            connection.get("provider") or "trata",
+        )
+    except ocems_api.OcemsApiError as e:
+        return jsonify({"success": False, "error": str(e)}), 409
+    return jsonify({"success": True, "job_id": job_id}), 202
+
+
+@app.route("/api/ocems/export/<job_id>")
+def api_ocems_export_status(job_id):
+    """Poll an export: JSON while it runs or if it failed, the CSV file once done."""
+    if not session.get("user_id"):
+        return jsonify({"success": False, "error": "Login required"}), 401
+    stp_id = _session_stp_id()
+    job = ocems_api.get_export(job_id, stp_id) if stp_id else None
+    if job is None:
+        return jsonify({"success": False, "error": "This download has expired. Start it again."}), 404
+    if job["status"] == "pending":
+        return jsonify({"success": True, "status": "pending"}), 202
+    if job["status"] == "error":
+        return jsonify({"success": False, "status": "error", "error": job["error"]}), 422
+
+    response = Response(job["csv"], mimetype="text/csv")
+    response.headers["Content-Disposition"] = f'attachment; filename="{job["filename"]}"'
+    response.headers["Cache-Control"] = "no-store"
+    return response
 
 
 @app.route("/api/current_user")
@@ -7945,7 +8011,7 @@ def upload_quality():
     if denied:
         return denied
     quality = request.form.get("quality_grade", "").strip()
-    if quality not in {"Platinum", "Gold", "Silver", "General"}:
+    if quality not in STP_GRADES:
         return "Invalid quality grade", 400
 
     stps = load_stps()
@@ -10209,6 +10275,9 @@ def stp_register():
 
     if not technology:
         return "STP technology is required", 400
+
+    if quality_grade not in STP_GRADES:
+        return "Choose a quality grade: " + ", ".join(STP_GRADES), 400
 
     if not latitude or not longitude:
         return "STP location is required", 400
@@ -16702,7 +16771,13 @@ def supply_ocems():
 
         latest_ocems=ocems.get("latest"),
 
-        ocems_units=ocems.get("units", {})
+        ocems_units=ocems.get("units", {}),
+
+        # The CSV export downloads the logged-in plant's own feed only.
+        ocems_connected=(
+            stp_id == _session_stp_id()
+            and get_active_ocems_api(stp_id) is not None
+        )
     )
 
 # =========================================================

@@ -487,9 +487,11 @@ def _after_fork_in_parent():
 
 
 def _after_fork_in_child():
-    global _cache_lock
+    global _cache_lock, _exports_lock
     _cache_lock = threading.Lock()   # may have been held by a parent thread
     _cache.clear()                   # threads recorded here don't exist in the child
+    _exports_lock = threading.Lock()
+    _exports.clear()                 # export threads don't exist in the child either
     _warmer["forked"] = False
     if _warmer["config"] is not None:
         _launch_warmer()
@@ -497,6 +499,98 @@ def _after_fork_in_child():
 
 if hasattr(os, "register_at_fork"):
     os.register_at_fork(after_in_parent=_after_fork_in_parent, after_in_child=_after_fork_in_child)
+
+
+# ---------------------------------------------------------------------------
+# CSV exports (the plant downloads the vendor's raw data)
+# ---------------------------------------------------------------------------
+
+# A 30-day pull can take minutes, longer than the web worker's request
+# timeout, so each export runs in a background thread and the page polls
+# for it. Finished files are kept for EXPORT_KEEP seconds.
+EXPORT_PATHS = {
+    "single": "/api/data/single",
+    "monthly": "/api/data/monthly",
+    "range": "/api/data/range",
+}
+EXPORT_TIMEOUT = 600          # seconds for one vendor export call
+EXPORT_KEEP = 900             # keep a finished export for 15 minutes
+EXPORT_MAX_DAYS = 92          # longest custom range
+
+_exports = {}                 # job id -> {"owner", "status", "csv", "error", "filename", "expires"}
+_exports_lock = threading.Lock()
+
+
+def export_params(kind, date_from=None, date_to=None):
+    """Validate an export request. Returns the vendor query parameters
+    (dict) for `kind`, or raises OcemsApiError with a user-safe message."""
+    if kind not in EXPORT_PATHS:
+        raise OcemsApiError("Choose what to download.")
+    if kind != "range":
+        return {}
+    try:
+        start = datetime.strptime(str(date_from or ""), "%Y-%m-%d").date()
+        end = datetime.strptime(str(date_to or ""), "%Y-%m-%d").date()
+    except ValueError:
+        raise OcemsApiError("Pick both a start and an end date.")
+    today = datetime.now(IST).date()
+    if start > end:
+        raise OcemsApiError("The start date must be on or before the end date.")
+    if end > today:
+        raise OcemsApiError("The end date can't be in the future.")
+    if (end - start).days + 1 > EXPORT_MAX_DAYS:
+        raise OcemsApiError(f"Pick a range of {EXPORT_MAX_DAYS} days or less.")
+    return {"from": start.isoformat(), "to": end.isoformat()}
+
+
+def _prune_exports():
+    now = time.monotonic()
+    for job_id in [j for j, e in _exports.items() if e["expires"] < now]:
+        _exports.pop(job_id, None)
+
+
+def start_export(owner, base_url, api_key, kind, params, filename, provider="trata"):
+    """Start downloading the vendor CSV in the background; returns a job id."""
+    job_id = hashlib.sha256(os.urandom(32)).hexdigest()[:24]
+    with _exports_lock:
+        _prune_exports()
+        # One vendor export at a time per plant, so repeated clicks can't
+        # pile up slow calls against the vendor and this server.
+        if any(e["owner"] == owner and e["status"] == "pending" for e in _exports.values()):
+            raise OcemsApiError("A download is already being prepared. Wait for it to finish.")
+        _exports[job_id] = {
+            "owner": owner, "status": "pending", "csv": None, "error": None,
+            "filename": filename, "expires": time.monotonic() + EXPORT_TIMEOUT + 60 + EXPORT_KEEP,
+        }
+
+    def run():
+        try:
+            text = _get_csv(base_url, api_key, EXPORT_PATHS[kind], params=params,
+                            provider=provider, timeout=EXPORT_TIMEOUT)
+            result = {"status": "done", "csv": text}
+        except OcemsApiError as e:
+            result = {"status": "error", "error": str(e)}
+        except Exception as e:  # never leave the page polling forever
+            _log(f"export failed: {type(e).__name__}: {str(e)[:160]}")
+            result = {"status": "error", "error": "The download failed. Try again."}
+        with _exports_lock:
+            entry = _exports.get(job_id)
+            if entry is not None:
+                entry.update(result)
+                entry["expires"] = time.monotonic() + EXPORT_KEEP
+
+    threading.Thread(target=run, name="ocems-export", daemon=True).start()
+    return job_id
+
+
+def get_export(job_id, owner):
+    """The export job if it belongs to `owner`, else None."""
+    with _exports_lock:
+        _prune_exports()
+        entry = _exports.get(str(job_id or ""))
+        if entry is None or entry["owner"] != owner:
+            return None
+        return dict(entry)
 
 
 # ---------------------------------------------------------------------------
