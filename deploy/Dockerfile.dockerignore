@@ -75,7 +75,6 @@ supabase/
 *.md
 Dockerfile
 docker-compose.yml
-Procfile
 .DS_Store
 .vscode/
 .idea/

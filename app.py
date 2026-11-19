@@ -5,6 +5,8 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from openpyxl import Workbook, load_workbook
 
+import sys
+import tempfile
 import threading
 import time
 import uuid
@@ -2193,6 +2195,36 @@ def serve_spa():
         )
     response = send_file(SPA_INDEX)
     response.headers["Cache-Control"] = "no-cache"
+    return response
+
+
+@app.route("/health")
+def health():
+    """Cheap health check for the host: the app is up and, when
+    DATABASE_URL is set, the database answers."""
+    try:
+        store.ping()
+    except Exception as e:
+        print("HEALTH CHECK DATABASE ERROR:", type(e).__name__, e)
+        return jsonify({"ok": False, "database": "unreachable"}), 503
+
+    return jsonify({
+        "ok": True,
+        "database": "connected" if store.enabled() else "files"
+    })
+
+
+@app.after_request
+def cache_hashed_assets(response):
+    """Vite puts a content hash in every file name under
+    /static/app/assets/, so a changed file always gets a new URL.
+    Let browsers keep those for a year instead of re-checking them."""
+    if (
+        request.path.startswith("/static/app/assets/")
+        and response.status_code == 200
+    ):
+        response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+
     return response
 
 
@@ -14382,6 +14414,51 @@ def timeout_worker():
         time.sleep(15)
 
 
+_timeout_worker_pid = None
+
+
+def _run_timeout_worker_as_leader():
+    """Run timeout_worker() in at most one process on this machine.
+
+    gunicorn may run several worker processes; each starts this thread,
+    but only the one holding the file lock processes offers. If it dies,
+    the lock is released and another process takes over."""
+    try:
+        import fcntl
+    except ImportError:  # Windows: no gunicorn, a single process
+        timeout_worker()
+        return
+
+    lock_path = os.path.join(tempfile.gettempdir(), "reflow-timeout-worker.lock")
+    lock_file = open(lock_path, "w")
+
+    while True:
+        try:
+            fcntl.flock(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            break
+        except OSError:
+            time.sleep(30)
+
+    timeout_worker()
+
+
+def start_timeout_worker():
+    """Start the tanker-offer timeout thread once per process."""
+    global _timeout_worker_pid
+
+    if _timeout_worker_pid == os.getpid():
+        return
+
+    _timeout_worker_pid = os.getpid()
+
+    threading.Thread(
+        target=_run_timeout_worker_as_leader,
+        daemon=True,
+        name="tanker-timeout-worker"
+    ).start()
+
+
+
 @app.route(
     "/api/tanker/vehicles/<vehicle_id>/remove",
     methods=["POST"]
@@ -16875,14 +16952,15 @@ def api_ocems_summary(stp_id):
         )
     })
 
-if __name__ == "__main__":
-    timeout_thread = threading.Thread(
-        target=timeout_worker,
-        daemon=True,
-        name="tanker-timeout-worker"
-    )
+# Under gunicorn (Docker / Azure) app.py is imported, never run as
+# __main__, so start the worker here, after everything it calls is
+# defined. Scripts that import app don't load gunicorn and don't start it.
+if "gunicorn" in sys.modules:
+    start_timeout_worker()
+    os.register_at_fork(after_in_child=start_timeout_worker)
 
-    timeout_thread.start()
+if __name__ == "__main__":
+    start_timeout_worker()
 
     port = int(os.environ.get("PORT", 10000))
 

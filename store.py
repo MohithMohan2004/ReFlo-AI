@@ -123,6 +123,14 @@ def enabled():
     return engine is not None
 
 
+def ping():
+    """Run a trivial query; raises if the database can't be reached."""
+    if engine is None:
+        return
+    with engine.connect() as conn:
+        conn.execute(text("SELECT 1"))
+
+
 def _key(path):
     return os.path.abspath(os.fspath(path))
 

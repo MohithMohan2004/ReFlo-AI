@@ -31,7 +31,7 @@ say "Project $APP (settings suffix _$PROJECT), subscription $SUB, region $LOC"
 # 1. Read .env.azure
 # ---------------------------------------------------------------------------
 say "Reading .env.azure"
-[ -f "$ENV_FILE" ] || die ".env.azure not found in $(basename "$REPO_DIR"). Create it with: bash deploy/render-env.sh (see deploy/AZURE.md)"
+[ -f "$ENV_FILE" ] || die ".env.azure not found in $(basename "$REPO_DIR"). Create it as in deploy/AZURE.md, step 3"
 if git -C "$REPO_DIR" ls-files --error-unmatch .env.azure >/dev/null 2>&1; then
   die "git tracks .env.azure. It holds secrets: run 'git rm --cached .env.azure' and commit that first."
 fi
@@ -120,7 +120,7 @@ while IFS='|' read -r key why; do
     missing_required=1
   fi
 done <<EOF
-FLASK_SECRET_KEY|nobody can sign in (Flask can't sign session cookies), and saved OCEMS API keys can't be decrypted unless OCEMS_KEY_SECRET is set. Use the SAME value as on Render.
+FLASK_SECRET_KEY|the app doesn't start at all. Use the SAME value as before: it signs logins and encrypts saved OCEMS API keys (unless OCEMS_KEY_SECRET is set).
 SUPABASE_URL|the app doesn't start at all (it creates the Supabase client at startup).
 SUPABASE_KEY|the app doesn't start at all (it creates the Supabase client at startup), and sign-in and live tanker locations fail.
 DATABASE_URL|orders, plants, registrations and pricing are kept in files inside the container and LOST on every deploy or restart.
