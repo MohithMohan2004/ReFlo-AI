@@ -39,13 +39,13 @@
     </g>
   </svg>
   <h1 id="title">Connecting to Re<span>Flow</span></h1>
-  <p id="msg">The server is waking up. This can take up to a minute.</p>
+  <p id="msg">Reaching the server. This usually takes a few seconds.</p>
   <div class="spinner" id="spinner"></div>
   <button id="retry" hidden>Try again</button>
 </main>
 <script>
   // REFLOW_SERVER_URL is rewritten by capacitor.config.ts on every `cap sync`.
-  window.REFLOW_SERVER_URL = "https://reflow-w9xu.onrender.com";
+  window.REFLOW_SERVER_URL = "https://reflow.lemonfield-c4c1d145.centralindia.azurecontainerapps.io";
 
   var server = window.REFLOW_SERVER_URL;
   var title = document.getElementById("title");
@@ -60,7 +60,7 @@
     retry.hidden = waiting;
     if (waiting) {
       title.innerHTML = "Connecting to Re<span>Flow</span>";
-      msg.textContent = "The server is waking up. This can take up to a minute.";
+      msg.textContent = "Reaching the server. This usually takes a few seconds.";
     } else if (!navigator.onLine) {
       title.innerHTML = "You're offline";
       msg.textContent = "Check your internet connection. ReFlow will reconnect on its own.";
@@ -79,7 +79,7 @@
     fetch(server + "/login", { mode: "no-cors", cache: "no-store", signal: ctrl && ctrl.signal })
       .then(function () { location.replace(server); })
       .catch(function () {
-        // Keep the "waking up" message for the first 90 s, then say it plainly.
+        // Keep the "connecting" message for the first 90 s, then say it plainly.
         show(navigator.onLine && Date.now() - started < 90000);
         timer = setTimeout(attempt, 5000);
       })

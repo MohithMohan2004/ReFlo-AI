@@ -44,7 +44,7 @@ the same Cloud Shell tab. Don't close the tab to "restart".
 committed (like `.env.azure`) can be lost, and you would have to repeat step 3.
 
 **3. The workflow files must already be on `main`** (they are pushed before these steps). Check with
-`ls deploy` after cloning: you should see `azure.sh`, `github-setup.sh` and `render-env.sh`.
+`ls deploy` after cloning: you should see `azure.sh`, `github-setup.sh` and `lib.sh`.
 
 ## Steps (in order)
 
@@ -100,51 +100,37 @@ git config user.name "$(gh api user --jq '.name // .login')"
 git config user.email "$(gh api user --jq '"\(.id)+\(.login)@users.noreply.github.com"')"
 ```
 
-### 3. Copy the settings from Render
+### 3. Create `.env.azure` (the settings)
 
-```bash
-bash deploy/render-env.sh
-```
-
-It asks for a Render API key (Render dashboard → **Account Settings** → **API Keys** → Create API
-Key). Paste it with **right-click → Paste** or **Ctrl+Shift+V**; typing is hidden, so you won't see
-it. Press Enter.
-
-It reads the service's own settings, any **environment groups** linked to it, and a **secret file**
-named `.env` if there is one. It writes `.env.azure` with every name ending in `_reflow`, never prints
-a value, and lists what it left out (PORT, Render-only settings, empty values) and which **required**
-settings are still missing, with where to get each.
-
-If it says the service isn't found, it lists the services your key can see. Run it again with the
-right name, for example:
-
-```bash
-bash deploy/render-env.sh reflow-w9xu
-```
-
-To see only the names it wrote (no values):
-
-```bash
-cut -d= -f1 .env.azure
-```
-
-To check or edit the values:
+The secrets live only in `.env.azure`, which git ignores. Create it in the repository folder:
 
 ```bash
 nano .env.azure
 ```
 
+Add one line per setting, `NAME_reflow=value` (no quotes, no spaces around `=`). The four required
+ones:
+
+```
+FLASK_SECRET_KEY_reflow=...
+SUPABASE_URL_reflow=https://<ref>.supabase.co
+SUPABASE_KEY_reflow=...
+DATABASE_URL_reflow=postgresql://postgres.<ref>:<password>@aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres
+```
+
+Where to get each one is in the table under [Settings](#settings). Keep `FLASK_SECRET_KEY` the
+**same value** the app has always used: it signs logins and encrypts the OCEMS API keys plants have
+saved. Only for a brand-new setup, make one with
+`python3 -c 'import secrets; print(secrets.token_hex(32))'`.
+
 In nano: move with the arrow keys; paste with right-click → Paste or Ctrl+Shift+V; save with
-**Ctrl+O** then **Enter**; quit with **Ctrl+X**. Each line is `NAME_reflow=value` (no spaces around
-`=`). **Never commit this file.** Git already ignores it.
+**Ctrl+O** then **Enter**; quit with **Ctrl+X**. Then lock the file down:
 
-**If it imported nothing useful** (it then says "NONE of the settings ReFlow needs were found"):
-Render may keep them where the API doesn't show them. In the Render dashboard open the service →
-**Environment** and look at **Linked Environment Groups** and **Secret Files**. Copy each value into
-`.env.azure` with `nano` as `NAME_reflow=value`, for example `FLASK_SECRET_KEY_reflow=...`. The four
-required ones are in the table under [Settings](#settings).
+```bash
+chmod 600 .env.azure
+```
 
-**Not on Render?** Create the file by hand the same way, then run `chmod 600 .env.azure`.
+To see only the names (no values): `cut -d= -f1 .env.azure`. **Never commit this file.**
 
 ### 4. Create the Azure resources
 
@@ -208,7 +194,7 @@ gh run watch
 ```
 
 Or open the repository's **Actions** tab → "Deploy to Azure". It builds the image (about 5–8
-minutes), rolls it out, and waits until the new version is ready and answers on `/`.
+minutes), rolls it out, and waits until the new version is ready and answers on `/health`.
 
 The address is the `BACKEND_URL` line in `deploy/azure-deploy.conf`:
 
@@ -216,9 +202,10 @@ The address is the `BACKEND_URL` line in `deploy/azure-deploy.conf`:
 grep BACKEND_URL deploy/azure-deploy.conf
 ```
 
-It looks like `https://reflow.<something>.centralindia.azurecontainerapps.io`. Open it in a browser:
+It is `https://reflow.lemonfield-c4c1d145.centralindia.azurecontainerapps.io`. Open it in a browser:
 you should see the ReFlow web app, and `/login` should show the sign-in page. The health check is
-the address itself (`/`).
+`/health`: it answers 200 when the app is up and the database answers, 503 if the database can't be
+reached.
 
 Until steps 4–6 are done, the workflow finishes with a notice "Azure isn't set up yet" and does
 nothing. That is expected.
@@ -229,12 +216,12 @@ Each setting carries the project name, so it can't clash with another project's:
 
 | In `.env.azure` | Secret in the portal (app → Settings → Secrets) | Env var the code reads | Needed? |
 |---|---|---|---|
-| `FLASK_SECRET_KEY_reflow` | `flask-secret-key-reflow` | `FLASK_SECRET_KEY` | **Required.** Use the same value as Render: it signs logins and (unless `OCEMS_KEY_SECRET` is set) encrypts saved OCEMS API keys |
+| `FLASK_SECRET_KEY_reflow` | `flask-secret-key-reflow` | `FLASK_SECRET_KEY` | **Required**: the app doesn't start without it. Keep the value the app has always used: it signs logins and (unless `OCEMS_KEY_SECRET` is set) encrypts saved OCEMS API keys |
 | `SUPABASE_URL_reflow` | `supabase-url-reflow` | `SUPABASE_URL` | **Required**: the app doesn't start without it |
 | `SUPABASE_KEY_reflow` | `supabase-key-reflow` | `SUPABASE_KEY` | **Required**: the app doesn't start without it |
 | `DATABASE_URL_reflow` | `database-url-reflow` | `DATABASE_URL` | **Required on Azure**: Supabase → Connect → **Session pooler** URI. Without it all data is kept in files inside the container and lost on every deploy |
 | `DATABASE_SCHEMA_reflow` | `database-schema-reflow` | `DATABASE_SCHEMA` | Optional (default `reflow`) |
-| `OCEMS_KEY_SECRET_reflow` | `ocems-key-secret-reflow` | `OCEMS_KEY_SECRET` | Optional. If Render has it, keep the same value, or saved OCEMS API keys stop working |
+| `OCEMS_KEY_SECRET_reflow` | `ocems-key-secret-reflow` | `OCEMS_KEY_SECRET` | Optional. If it was set before, keep the same value, or saved OCEMS API keys stop working |
 | `OLLAMA_BASE_URL_reflow`, `JUNO_LLM_MODEL_reflow`, `JUNO_LLM_TIMEOUT_reflow` | `ollama-base-url-reflow`, ... | `OLLAMA_BASE_URL`, ... | Optional: Juno's language model. There is no Ollama in Azure; without one Juno uses its fuzzy matching only |
 | (none) | (none) | `PORT=8080` | Always set by the script |
 
@@ -249,8 +236,7 @@ that would become the same secret.
   **Revisions and replicas** → restart the active revision so the app reads it.
 - **Or in Cloud Shell:** edit `.env.azure` (`nano .env.azure`) and run `bash deploy/azure.sh` again.
   It updates only what changed, starts a new revision, and removes secrets you deleted from the file.
-  (If `.env.azure` is gone because the Cloud Shell session ended, run `bash deploy/render-env.sh`
-  again first, or recreate it by hand.)
+  (If `.env.azure` is gone because the Cloud Shell session ended, recreate it as in step 3.)
 - **Size or replicas:** edit `CPU`, `MEMORY`, `MIN_REPLICAS` or `MAX_REPLICAS` in
   `deploy/azure-deploy.conf`, run `bash deploy/azure.sh`, then run the `git` line it prints.
 
@@ -270,30 +256,16 @@ Code changes need nothing: push to `main` and GitHub deploys them. Deploys never
   The deploy identity can change only group `reflow`, push to its own registry, and join the
   environment. Nothing on `purva-bot`, nothing on the subscription.
 
-## Switching users over to the new address
+## The address
 
-Render keeps running untouched until you decide to switch. Both addresses work at the same time
-against the same Supabase project and database (as long as both use the same `DATABASE_URL` and
-`FLASK_SECRET_KEY`).
+ReFlow is served at **https://reflow.lemonfield-c4c1d145.centralindia.azurecontainerapps.io** (`BACKEND_URL` in `deploy/azure-deploy.conf`).
 
-When you switch:
-
-1. **Tell users the new address** (`BACKEND_URL` in `deploy/azure-deploy.conf`). People sign in
-   again once on the new address (sessions are per address).
-2. **Android app:** it opens `https://reflow-w9xu.onrender.com` (set in `mobile/capacitor.config.ts`
-   and `mobile/www/offline.html`). Installed phones keep using Render until you build and hand out a
-   new APK with the new address (`REFLOW_SERVER_URL=<new address> npm run apk`, see
-   `mobile/README.md`). Keep Render running until users have the new APK.
-3. **Supabase Auth URLs:** Supabase dashboard → Authentication → URL Configuration. Add the new
-   address to **Redirect URLs**, and change **Site URL** to it when you switch (sign-up confirmation
-   and password emails link to the Site URL). Keep the Render address in Redirect URLs until Render
-   is switched off.
-4. **Links already shared** (order tracking links) point at the Render address and keep working only
-   while Render runs. ReFlow prints no QR codes and has no CORS setting (web app and server share one
-   address), so nothing else changes.
-5. **Then switch Render off.** Each server runs its own OCEMS feed warmer and caches; once users have
-   moved, suspend the Render service (Render dashboard → service → Settings → Suspend) so only one
-   server writes to the database.
+- **Android app:** `mobile/capacitor.config.ts` and `mobile/www/offline.html` default to this
+  address, so `npm run apk` in `mobile/` builds an app that opens it (see `mobile/README.md`).
+- **Supabase Auth URLs:** Supabase dashboard → Authentication → URL Configuration. **Site URL** and
+  **Redirect URLs** must contain this address (sign-up confirmation and password emails link to the
+  Site URL).
+- ReFlow prints no QR codes and has no CORS setting (web app and server share one address).
 
 ## Removing ReFlow from Azure
 
@@ -310,17 +282,16 @@ or the "Container Apps environment join (purva-bot-env)" role: other projects us
   inside the container and are lost whenever the app restarts or a new version deploys.
 - **Tanker vehicle documents** (RC, insurance, PUC, permit uploads) are always saved on the
   container's disk (`uploads/tanker_documents`), even with a database. They are **lost on every
-  deploy or restart** (the database keeps the record, but the file is gone). The same happens on
-  Render today.
+  deploy or restart** (the database keeps the record, but the file is gone). Moving them to Supabase
+  Storage or Azure Blob Storage fixes this.
 - **Size:** 0.5 vCPU / 1 GiB. Measured locally: about 290 MiB idle and 445 MiB with 8 users
   loading forecasts, dashboards and chat at once. At 0.25 vCPU / 0.5 GiB memory reached 86% of the
   limit and a plant's forecast took about 20 s under that load, so the smaller size is too tight.
   Always on (`MIN_REPLICAS=1`), exactly one replica (`MAX_REPLICAS=1`):
   the app keeps locks, the OCEMS cache and export jobs in memory and uploads on disk, so a second
   copy would disagree with the first.
-- **Tanker offer timeouts:** the worker that expires tanker offers after 10/30 minutes only starts
-  when the app is run with `python app.py`, not under gunicorn. The repository's own start
-  commands for Render (`Procfile`, `Dockerfile`) also use gunicorn, so this is likely the same on
-  Render today: offers don't expire on their own. Fixing it needs a code change.
-- **Caching:** Flask sends every file with `Cache-Control: no-cache` (browsers revalidate each
-  time), the same as on Render. Missing files under `/static/app/assets/` correctly return 404.
+- **Tanker offer timeouts:** the worker that expires tanker offers after 10/30 minutes starts in
+  every gunicorn worker process; a file lock lets only one of them process offers at a time.
+- **Caching:** the hashed files under `/static/app/assets/` are cached for a year (their names change
+  whenever their content does); everything else is sent with `Cache-Control: no-cache`. Missing
+  files under `/static/app/assets/` correctly return 404.

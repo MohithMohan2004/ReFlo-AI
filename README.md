@@ -195,7 +195,14 @@ The server reads its settings from environment variables (or a `.env` file):
 
 To move existing local data into PostgreSQL, run `python scripts/migrate_to_postgres.py` once.
 
-In production the app runs under Gunicorn (`gunicorn app:app --timeout 120`, see `Procfile`).
+## Deployment
+
+ReFlow runs on Azure Container Apps at https://reflow.lemonfield-c4c1d145.centralindia.azurecontainerapps.io.
+Every push to `main` builds the image in `deploy/Dockerfile` and deploys it through GitHub Actions
+(`.github/workflows/azure.yml`). Inside the container the app runs under Gunicorn. Setup, settings
+and day-to-day changes are described in `deploy/AZURE.md`.
+
+To run the same image locally: `docker compose up --build` (reads `.env`).
 
 ## Demand forecasting
 
