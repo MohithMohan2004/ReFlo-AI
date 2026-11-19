@@ -1,0 +1,81 @@
+# Used automatically by "docker build -f deploy/Dockerfile ." (BuildKit picks
+# up <Dockerfile>.dockerignore next to the Dockerfile). Paths are relative
+# to the build context (the repository root).
+
+# Version control and CI
+.git
+.github
+.gitignore
+.gitattributes
+
+# Secrets and local settings: never in the image
+.env
+.env.*
+**/.env
+**/.env.*
+*.pem
+*.key
+secrets/
+credentials/
+
+# Deploy tooling (only deploy/Dockerfile is read, and BuildKit reads it separately)
+deploy/
+
+# Virtualenvs (also committed ones, at any depth) and node_modules
+venv/
+.venv/
+env/
+**/venv/
+**/.venv/
+**/env/
+**/node_modules/
+
+# Python leftovers
+**/__pycache__
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Tests
+tests/
+test/
+**/test_*.py
+**/*_test.py
+
+# Local data, uploads, databases and logs (production keeps data in Postgres).
+# Only the two seed CSVs the app reads are kept from database/.
+uploads/
+database/*
+!database/stp_pricing.csv
+!database/synthetic_orders.csv
+*.db
+*.sqlite
+*.sqlite3
+*.graphml
+*.log
+logs/
+tmp/
+temp/
+exports/
+
+# Web app: the committed build is excluded; the image builds static/app from
+# frontend/ in its own stage
+frontend/dist/
+frontend/*.tsbuildinfo
+static/app/
+
+# Not needed by the server
+mobile/
+docs/
+scripts/
+supabase/
+*.md
+Dockerfile
+docker-compose.yml
+Procfile
+.DS_Store
+.vscode/
+.idea/

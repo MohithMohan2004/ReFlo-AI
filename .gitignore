@@ -187,3 +187,5 @@ database/tanker_vehicles.csv
 database/tanker_vehicle_documents.csv
 database/stp_transfers.csv
 database/ocems_submissions.csv
+.env.azure
+.env.azure.bak
