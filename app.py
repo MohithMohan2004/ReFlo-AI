@@ -14,6 +14,7 @@ from datetime import datetime, date, timedelta
 import json
 import os
 import math
+import random
 import re
 import requests
 import pandas as pd
@@ -2142,6 +2143,56 @@ OCEMS_DEFAULT_LIMITS = {
 }
 
 
+# Demo plants that show generated OCEMS readings until they connect a real
+# feed (a live feed always wins). Values stay inside OCEMS_DEFAULT_LIMITS.
+SYNTHETIC_OCEMS_STPS = {"PSTP009"}  # Purva Atmosphere
+
+
+def synthetic_ocems_data(stp_id):
+    """Seven days of readings, one per 15 minutes plus the current minute,
+    in the shape load_ocems_api_data() returns. Each slot is seeded from
+    the plant and its time, so a reading never changes between page loads
+    or server processes."""
+    if stp_id not in SYNTHETIC_OCEMS_STPS:
+        return None
+
+    step = ocems_api.HISTORY_STEP_MINUTES
+    now = datetime.now(ocems_api.IST).replace(second=0, microsecond=0, tzinfo=None)
+    slot = now - timedelta(minutes=now.minute % step)
+    times = [now] if now != slot else []
+    times += [
+        slot - timedelta(minutes=step * i)
+        for i in range(ocems_api.HISTORY_DAYS * 24 * 60 // step)
+    ]
+
+    rows = []
+    for t in times:
+        rng = random.Random(f"{stp_id}-{t:%Y%m%d%H%M}")
+        hour = t.hour + t.minute / 60
+        # Load peaks in the morning and evening, like a residential STP.
+        load = 0.5 * (math.sin((hour - 7) / 24 * 2 * math.pi) + math.sin((hour - 13) / 12 * 2 * math.pi))
+        rows.append({
+            "timestamp": t.strftime("%Y-%m-%d %H:%M:%S"),
+            "COD": round(28 + 6 * load + rng.uniform(-3, 3), 1),
+            "BOD": round(5.6 + 1.3 * load + rng.uniform(-0.6, 0.6), 1),
+            "TSS": round(5.2 + 1.2 * load + rng.uniform(-0.7, 0.7), 1),
+            "pH": round(7.25 + 0.12 * load + rng.uniform(-0.08, 0.08), 2),
+        })
+
+    stp = get_stp_by_id(stp_id) or {}
+    return {
+        "available": True,
+        "source": "synthetic",
+        "company_name": stp.get("stp_name") or stp_id,
+        "station_name": "Demo feed",
+        "parameters": ["COD", "BOD", "TSS", "pH"],
+        "units": {"COD": "mg/L", "BOD": "mg/L", "TSS": "mg/L"},
+        "rows": rows,
+        "latest": rows[0],
+        "file": None,
+    }
+
+
 def load_ocems_data(stp_id):
     """
     OCEMS readings for a plant, from its connected live API feed
@@ -2156,6 +2207,14 @@ def load_ocems_data(stp_id):
             for parameter in live["parameters"]
         }
         return live
+
+    synthetic = synthetic_ocems_data(stp_id)
+    if synthetic:
+        synthetic["permissible_ranges"] = {
+            parameter: OCEMS_DEFAULT_LIMITS.get(parameter, "-")
+            for parameter in synthetic["parameters"]
+        }
+        return synthetic
 
     return {
         "available": False,
